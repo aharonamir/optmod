@@ -1,5 +1,5 @@
-from . import BaseContextMutator
-from ..schemas import ChatMessage, RoutingDecision
+from optmod.mutators import BaseContextMutator
+from optmod.schemas import ChatMessage, RoutingDecision
 
 
 class ThinkingModeMutator(BaseContextMutator):

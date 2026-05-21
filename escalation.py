@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 
-from .schemas import RoutingContext
-from .registry import ModelConfig
+from optmod.schemas import RoutingContext
+from optmod.registry import ModelConfig
 
 
 @dataclass

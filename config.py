@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-from .registry import ModelConfig
+from optmod.registry import ModelConfig
 
 
 @dataclass

@@ -23,8 +23,16 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 
-[tool.setuptools.packages.find]
-include = ["optmod*"]
+# Flat layout: the project root IS the optmod package.
+# package-dir maps the package name to "." so that
+# `from optmod.main import app` resolves to ./main.py, etc.
+[tool.setuptools]
+packages = ["optmod", "optmod.routing", "optmod.mutators"]
+
+[tool.setuptools.package-dir]
+optmod = "."
+"optmod.routing" = "routing"
+"optmod.mutators" = "mutators"
 
 [build-system]
 requires = ["setuptools>=68"]

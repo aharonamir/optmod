@@ -7,18 +7,18 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import load_config, Config
-from .registry import ModelRegistry
-from .features import FeatureExtractor
-from .routing import BaseRouter, build_router
-from .mutators import BaseContextMutator
-from .mutators.noop import NoopMutator
-from .mutators.thinking_mode import ThinkingModeMutator
-from .escalation import EscalationPolicy
-from .forwarder import ModelForwarder
-from .log import RoutingLog
-from .schemas import OpenAIChatRequest, RoutingContext, RoutingDecision, LogEntry
-from .stats import stats_router
+from optmod.config import load_config, Config
+from optmod.registry import ModelRegistry
+from optmod.features import FeatureExtractor
+from optmod.routing import BaseRouter, build_router
+from optmod.mutators import BaseContextMutator
+from optmod.mutators.noop import NoopMutator
+from optmod.mutators.thinking_mode import ThinkingModeMutator
+from optmod.escalation import EscalationPolicy
+from optmod.forwarder import ModelForwarder
+from optmod.log import RoutingLog
+from optmod.schemas import OpenAIChatRequest, RoutingContext, RoutingDecision, LogEntry
+from optmod.stats import stats_router
 
 _registry:   ModelRegistry       | None = None
 _extractor:  FeatureExtractor    | None = None

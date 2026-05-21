@@ -1,7 +1,7 @@
 import threading
 from pathlib import Path
 
-from .schemas import LogEntry
+from optmod.schemas import LogEntry
 
 
 class RoutingLog:

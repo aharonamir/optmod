@@ -1,7 +1,7 @@
 import httpx
 
-from .registry import ModelConfig
-from .schemas import OpenAIChatRequest, ChatMessage
+from optmod.registry import ModelConfig
+from optmod.schemas import OpenAIChatRequest, ChatMessage
 
 
 class ModelForwarder:

@@ -1,9 +1,9 @@
 import logging
 
-from . import BaseRouter
-from .rule_based import RuleBasedRouter
-from .context import RoutingContext
-from ..schemas import RoutingDecision
+from optmod.routing import BaseRouter
+from optmod.routing.rule_based import RuleBasedRouter
+from optmod.routing.context import RoutingContext
+from optmod.schemas import RoutingDecision
 
 
 class DecisionTreeRouter(BaseRouter):

@@ -1,6 +1,6 @@
 import re
 
-from .schemas import Features, OpenAIChatRequest
+from optmod.schemas import Features, OpenAIChatRequest
 
 # ── Compiled at import time ──────────────────────────────────────
 _TASK: dict[str, re.Pattern] = {

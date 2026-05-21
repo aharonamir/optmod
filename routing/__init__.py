@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
-from .context import RoutingContext
-from ..schemas import RoutingDecision
+from optmod.routing.context import RoutingContext
+from optmod.schemas import RoutingDecision
 
 
 class BaseRouter(ABC):
@@ -18,7 +18,7 @@ class BaseRouter(ABC):
         return self.__class__.__name__
 
     def _passthrough(self, ctx: RoutingContext, reason: str) -> RoutingDecision:
-        from ..schemas import RoutingDecision
+        from optmod.schemas import RoutingDecision
         return RoutingDecision(
             model=ctx.registry.primary,
             mutator="noop",
@@ -31,7 +31,7 @@ class BaseRouter(ABC):
 def build_router(name: str, config: dict) -> BaseRouter:
     from .passthrough   import PassthroughRouter
     from .rule_based    import RuleBasedRouter
-    from .decision_tree import DecisionTreeRouter
+    from optmod.routing.decision_tree import DecisionTreeRouter
 
     mapping = {
         "passthrough":   PassthroughRouter,

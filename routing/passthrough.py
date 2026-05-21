@@ -1,6 +1,6 @@
-from . import BaseRouter
-from .context import RoutingContext
-from ..schemas import RoutingDecision
+from optmod.routing import BaseRouter
+from optmod.routing.context import RoutingContext
+from optmod.schemas import RoutingDecision
 
 
 class PassthroughRouter(BaseRouter):

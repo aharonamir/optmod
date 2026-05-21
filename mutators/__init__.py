@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from ..schemas import ChatMessage, RoutingDecision
+from optmod.schemas import ChatMessage, RoutingDecision
 
 
 class BaseContextMutator(ABC):
