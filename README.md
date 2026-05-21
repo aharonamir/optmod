@@ -37,8 +37,9 @@ ollama pull qwen3:8b
 export DEEPSEEK_API_KEY=your_key_here
 
 # Install and run
-pip install -e '.[dev]'
-uvicorn optmod.main:app --host 0.0.0.0 --port 8765 --reload
+uv venv && uv pip install -e '.[dev]'
+source .venv/bin/activate
+uvicorn main:app --host 0.0.0.0 --port 8765 --reload
 ```
 
 ```bash
@@ -91,28 +92,30 @@ api_key: optmod
 
 ## Project layout
 
+Flat layout — source lives at the project root, importable as `optmod.*`.
+
 ```
-optmod/          Python package
-├── main.py      FastAPI app, lifespan, proxy endpoint
-├── schemas.py   Pydantic + dataclass types
-├── config.py    Config loader (config.yaml)
-├── registry.py  ModelConfig + ModelRegistry
-├── features.py  FeatureExtractor (<1ms regex classifier)
-├── forwarder.py Async httpx forwarder, one client per base_url
-├── escalation.py EscalationPolicy
-├── log.py       Append-only JSONL log
-├── stats.py     /api/stats aggregation
-├── routing/     BaseRouter, PassthroughRouter, RuleBasedRouter, DecisionTreeRouter
-├── mutators/    BaseContextMutator, NoopMutator, ThinkingModeMutator
-└── tests/       31 tests (features, routers, escalation, e2e with respx)
-config.yaml      Model pool + router config
-ui/index.html    Self-contained stats dashboard
+main.py        FastAPI app, lifespan, proxy endpoint
+schemas.py     Pydantic + dataclass types
+config.py      Config loader (config.yaml)
+registry.py    ModelConfig + ModelRegistry
+features.py    FeatureExtractor (<1ms regex classifier)
+forwarder.py   Async httpx forwarder, one client per base_url
+escalation.py  EscalationPolicy
+log.py         Append-only JSONL log
+stats.py       /api/stats aggregation
+routing/       BaseRouter, PassthroughRouter, RuleBasedRouter, DecisionTreeRouter
+mutators/      BaseContextMutator, NoopMutator, ThinkingModeMutator
+tests/         31 tests (features, routers, escalation, e2e with respx)
+config.yaml    Model pool + router config
+ui/index.html  Self-contained stats dashboard
+.venv/         uv virtual environment (not committed)
 ```
 
 ## Running tests
 
 ```bash
-pytest optmod/tests/ -v
+uv run pytest tests/ -v
 ```
 
 ## What's not built yet (Phase 2)
