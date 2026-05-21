@@ -1,0 +1,54 @@
+# Active router: passthrough | rule_based | decision_tree
+router: rule_based
+
+# Oracle model — quality ceiling, used as primary
+primary_model: deepseek-v4
+
+# Path to WildClawBench-trained decision tree (created in Phase 2)
+policy_path: routing_policy.pkl
+
+# JSONL log path (relative to working directory)
+log_path: routing.log.jsonl
+
+escalation:
+  max_escalations: 2
+
+models:
+  - name: qwen2.5:7b
+    provider: ollama
+    base_url: http://localhost:11434/v1
+    api_key_env: null
+    tier: 0
+    tier_name: fast
+    context_window: 32768
+    cost_per_1k: 0.0
+    supports_tools: true
+    thinking_mode: false
+    thinking_default: false
+    timeout_s: 60.0
+
+  - name: qwen3:8b
+    provider: ollama
+    base_url: http://localhost:11434/v1
+    api_key_env: null
+    tier: 1
+    tier_name: reasoning
+    context_window: 32768
+    cost_per_1k: 0.0
+    supports_tools: true
+    thinking_mode: true
+    thinking_default: false
+    timeout_s: 120.0
+
+  - name: deepseek-v4
+    provider: deepseek
+    base_url: https://api.deepseek.com/v1
+    api_key_env: DEEPSEEK_API_KEY
+    tier: 2
+    tier_name: oracle
+    context_window: 128000
+    cost_per_1k: 0.0014
+    supports_tools: true
+    thinking_mode: false
+    thinking_default: false
+    timeout_s: 180.0
