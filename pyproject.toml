@@ -19,6 +19,10 @@ dev = [
     "respx>=0.21",
     "httpx[test]",
 ]
+trouter = [
+    "torch>=2.0",
+    "sentence-transformers>=3.0",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

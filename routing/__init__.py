@@ -29,14 +29,16 @@ class BaseRouter(ABC):
 
 
 def build_router(name: str, config: dict) -> BaseRouter:
-    from .passthrough   import PassthroughRouter
-    from .rule_based    import RuleBasedRouter
-    from optmod.routing.decision_tree import DecisionTreeRouter
+    from .passthrough    import PassthroughRouter
+    from .rule_based     import RuleBasedRouter
+    from .decision_tree  import DecisionTreeRouter
+    from .trouter_router import TRouterRouter
 
     mapping = {
         "passthrough":   PassthroughRouter,
         "rule_based":    RuleBasedRouter,
         "decision_tree": DecisionTreeRouter,
+        "trouter":       TRouterRouter,
     }
     cls = mapping.get(name, PassthroughRouter)
     return cls(config)
