@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from pathlib import Path
 
 from optmod.routing import BaseRouter
@@ -9,16 +10,45 @@ from optmod.schemas import RoutingDecision
 _WEIGHTS_PATH = Path(__file__).parent / "trouter_weights.pt"
 _DEFAULT_COST_WEIGHT = 0.3
 
-# TRouter model index → optmod tier
-# Trained on: idx0=arcee (reasoning/free), idx1=deepseek-v4-flash, idx2=openai-120b (oracle)
-# Maps positionally to tier 0 (fast), tier 1 (reasoning), tier 2 (oracle)
-_IDX_TO_TIER = {0: 0, 1: 1, 2: 2}
+
+def _normalize(s: str) -> str:
+    """Lowercase and collapse all separators (/ : - _) to underscore."""
+    return re.sub(r"[/_:\-]", "_", s.lower())
+
+
+def _resolve_model(idx: int, model_ids: list[str], registry):
+    """
+    Map a TRouter model index to a ModelConfig by name matching.
+    The checkpoint uses model_ids like 'arcee-ai_trinity-large-thinking_free';
+    the registry uses names like 'arcee-ai/trinity-large-thinking:free'.
+    Normalise both to underscores and try exact then prefix match.
+    Falls back to primary if nothing matches.
+    """
+    if idx >= len(model_ids):
+        return registry.primary
+
+    norm_wid = _normalize(model_ids[idx])
+    all_models = registry.all()
+
+    # Exact match
+    for m in all_models:
+        if _normalize(m.name) == norm_wid:
+            return m
+
+    # Prefix match in either direction (handles version suffixes like -flash)
+    for m in all_models:
+        norm_name = _normalize(m.name)
+        if norm_wid.startswith(norm_name) or norm_name.startswith(norm_wid):
+            return m
+
+    return registry.primary
 
 
 class TRouterRouter(BaseRouter):
     def __init__(self, config: dict) -> None:
         super().__init__(config)
         self._ready = False
+        self._model_ids: list[str] = []
 
         alpha_cfg = config.get("trouter_cost_weight")
         alpha_env = os.environ.get("TROUTER_COST_WEIGHT")
@@ -43,6 +73,7 @@ class TRouterRouter(BaseRouter):
             self._nn.eval()
 
             self._prior = ckpt["prior"]
+            self._model_ids = ckpt.get("model_ids", [])
             encoder_name = ckpt.get("encoder_name", "all-MiniLM-L6-v2")
             self._encoder = SentenceTransformer(encoder_name)
             self._route_fn = _trouter_route
@@ -50,7 +81,7 @@ class TRouterRouter(BaseRouter):
             self._ready = True
             logging.info(
                 f"[optmod] TRouterRouter loaded (α={self._cost_weight}, "
-                f"encoder={encoder_name})"
+                f"encoder={encoder_name}, model_ids={self._model_ids})"
             )
         except Exception as exc:
             logging.warning(f"[optmod] TRouterRouter failed to load: {exc}")
@@ -72,22 +103,21 @@ class TRouterRouter(BaseRouter):
         chosen_idx, scores_adj, _ = self._route_fn(
             self._nn, emb, self._prior, self._cost_weight
         )
+        chosen_idx = int(chosen_idx)
 
-        tier = _IDX_TO_TIER.get(int(chosen_idx), 2)
-        candidates = ctx.registry.by_tier(tier)
-        model = candidates[0] if candidates else ctx.registry.primary
-
+        model = _resolve_model(chosen_idx, self._model_ids, ctx.registry)
         mutator = "thinking_mode" if model.thinking_mode else "noop"
         adj_score = float(scores_adj[chosen_idx].item())
         confidence = float(
             self._torch.softmax(scores_adj, dim=0)[chosen_idx].item()
         )
+        weight_id = self._model_ids[chosen_idx] if chosen_idx < len(self._model_ids) else "?"
 
         return RoutingDecision(
             model=model,
             mutator=mutator,
             reason=(
-                f"trouter: idx={chosen_idx} → tier={tier} ({model.name}) "
+                f"trouter: idx={chosen_idx} ({weight_id}) → {model.name} "
                 f"score={adj_score:.3f} α={self._cost_weight}"
             ),
             confidence=confidence,
