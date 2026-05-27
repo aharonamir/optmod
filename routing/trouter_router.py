@@ -19,10 +19,16 @@ def _normalize(s: str) -> str:
 def _resolve_model(idx: int, model_ids: list[str], registry):
     """
     Map a TRouter model index to a ModelConfig by name matching.
-    The checkpoint uses model_ids like 'arcee-ai_trinity-large-thinking_free';
-    the registry uses names like 'arcee-ai/trinity-large-thinking:free'.
-    Normalise both to underscores and try exact then prefix match.
-    Falls back to primary if nothing matches.
+
+    The checkpoint uses model_ids like 'arcee-ai_trinity-large-thinking_free'
+    and 'deepseek-v4-flash'; the registry may use names like
+    'arcee-ai/trinity-large-thinking:free' or 'deepseek/deepseek-v4-flash'.
+
+    Matching strategy (first hit wins):
+      1. Exact match on full normalised name.
+      2. Exact match on just the local component after the last '/' in the
+         registry name (handles 'deepseek/deepseek-v4-flash' → 'deepseek-v4-flash').
+      3. Prefix match in either direction on the full name.
     """
     if idx >= len(model_ids):
         return registry.primary
@@ -30,12 +36,18 @@ def _resolve_model(idx: int, model_ids: list[str], registry):
     norm_wid = _normalize(model_ids[idx])
     all_models = registry.all()
 
-    # Exact match
+    # Pass 1: exact full-name match
     for m in all_models:
         if _normalize(m.name) == norm_wid:
             return m
 
-    # Prefix match in either direction (handles version suffixes like -flash)
+    # Pass 2: match against local component (after last '/')
+    for m in all_models:
+        local = _normalize(m.name.split("/")[-1])
+        if local == norm_wid:
+            return m
+
+    # Pass 3: prefix match on full name in either direction
     for m in all_models:
         norm_name = _normalize(m.name)
         if norm_wid.startswith(norm_name) or norm_name.startswith(norm_wid):

@@ -2,7 +2,7 @@
 router: rule_based
 
 # Oracle model — quality ceiling, used as primary
-primary_model: deepseek-v4
+primary_model: deepseek/deepseek-v4-flash
 
 # Path to WildClawBench-trained decision tree (created in Phase 2)
 policy_path: routing_policy.pkl
@@ -27,23 +27,23 @@ models:
     thinking_default: false
     timeout_s: 60.0
 
-  - name: arcee-ai/trinity-large-thinking:free
+  - name: arcee-ai/trinity-large-thinking
     provider: openrouter
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
     tier: 1
     tier_name: reasoning
     context_window: 256000
-    cost_per_1k: 0.0
+    cost_per_1k: 0.00022
     supports_tools: true
     thinking_mode: true
     thinking_default: false
     timeout_s: 120.0
 
-  - name: deepseek-v4
-    provider: deepseek
-    base_url: https://api.deepseek.com/v1
-    api_key_env: DEEPSEEK_API_KEY
+  - name: deepseek/deepseek-v4-flash
+    provider: openrouter
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
     tier: 2
     tier_name: oracle
     context_window: 256000
