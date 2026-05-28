@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>optmod · routing dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #080C14;
+    --surface:  #0D1420;
+    --border:   #1A2540;
+    --teal:     #00C2D4;
+    --teal-dim: #008E9E;
+    --amber:    #F5A623;
+    --green:    #22D47A;
+    --red:      #F05252;
+    --purple:   #9B6DFF;
+    --text:     #C8D8F0;
+    --muted:    #4A6080;
+    --white:    #FFFFFF;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { height: 100%; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,194,212,0.015) 2px,
+      rgba(0,194,212,0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* ── HEADER ────────────────────────────────────── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .logo-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--white);
+    letter-spacing: -0.5px;
+  }
+
+  .logo-tag {
+    font-size: 11px;
+    color: var(--teal);
+    letter-spacing: 3px;
+    font-weight: 500;
+    text-transform: uppercase;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .status-dot.error { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .status-label {
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .refresh-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .refresh-badge span { color: var(--teal); }
+
+  /* ── TIME RANGE SELECTOR ───────────────────────── */
+  .time-bar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 14px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  .time-label {
+    font-size: 11px;
+    color: var(--muted);
+    margin-right: 16px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .time-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-right: none;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 6px 16px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 1px;
+  }
+
+  .time-btn:first-of-type { border-radius: 4px 0 0 4px; }
+  .time-btn:last-of-type  { border-right: 1px solid var(--border); border-radius: 0 4px 4px 0; }
+
+  .time-btn:hover { color: var(--text); border-color: var(--teal-dim); background: rgba(0,194,212,0.05); }
+
+  .time-btn.active {
+    background: rgba(0,194,212,0.12);
+    border-color: var(--teal);
+    color: var(--teal);
+  }
+
+  .router-badge {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  .router-badge .label { color: var(--muted); }
+  .router-badge .value {
+    padding: 3px 10px;
+    background: rgba(155,109,255,0.15);
+    border: 1px solid rgba(155,109,255,0.4);
+    border-radius: 3px;
+    color: var(--purple);
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+
+  /* ── MAIN GRID ─────────────────────────────────── */
+  main {
+    padding: 24px 32px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    grid-template-rows: auto auto auto auto;
+    gap: 16px;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+
+  /* ── STAT CARDS ────────────────────────────────── */
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 20px 22px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.teal::before   { background: var(--teal); }
+  .stat-card.amber::before  { background: var(--amber); }
+  .stat-card.green::before  { background: var(--green); }
+  .stat-card.red::before    { background: var(--red); }
+  .stat-card.purple::before { background: var(--purple); }
+
+  .stat-card:hover { border-color: var(--teal-dim); }
+
+  .stat-label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .stat-value {
+    font-family: 'Syne', sans-serif;
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--white);
+    line-height: 1;
+    margin-bottom: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-sub {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .stat-sub .up   { color: var(--green); }
+  .stat-sub .down { color: var(--red); }
+  .stat-sub .teal { color: var(--teal); }
+
+  /* ── WIDE CARDS ────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .card-title {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--teal);
+    font-weight: 600;
+  }
+
+  .card-meta { font-size: 10px; color: var(--muted); }
+
+  .card-body { padding: 18px 20px; }
+
+  /* ── MODEL DISTRIBUTION ────────────────────────── */
+  .model-dist { grid-column: span 2; }
+
+  .model-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .model-row:last-child { margin-bottom: 0; }
+
+  .model-name {
+    width: 130px;
+    font-size: 12px;
+    color: var(--text);
+    flex-shrink: 0;
+    font-weight: 500;
+  }
+
+  .model-tier {
+    font-size: 9px;
+    letter-spacing: 1px;
+    padding: 2px 6px;
+    border-radius: 2px;
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+
+  .tier-fast     { background: rgba(34,212,122,0.15); color: var(--green); border: 1px solid rgba(34,212,122,0.3); }
+  .tier-reason   { background: rgba(155,109,255,0.15); color: var(--purple); border: 1px solid rgba(155,109,255,0.3); }
+  .tier-oracle   { background: rgba(245,166,35,0.15); color: var(--amber); border: 1px solid rgba(245,166,35,0.3); }
+
+  .model-bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .model-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  .model-count {
+    width: 36px;
+    text-align: right;
+    font-size: 12px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .model-pct {
+    width: 38px;
+    text-align: right;
+    font-size: 12px;
+    color: var(--text);
+    flex-shrink: 0;
+    font-weight: 600;
+  }
+
+  /* ── TASK TYPE DISTRIBUTION ────────────────────── */
+  .task-dist { grid-column: span 2; }
+
+  .task-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .task-cell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+
+  .task-name {
+    font-size: 11px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .task-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .task-pct {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--white);
+  }
+
+  /* ── LATENCY / ESCALATION ──────────────────────── */
+  .latency-card { grid-column: span 2; }
+  .escalation-card { grid-column: span 2; }
+
+  /* ── LATENCY BARS ──────────────────────────────── */
+  .latency-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 80px;
+    margin-bottom: 8px;
+  }
+
+  .lat-bar-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    height: 100%;
+    justify-content: flex-end;
+  }
+
+  .lat-bar {
+    width: 100%;
+    border-radius: 2px 2px 0 0;
+    transition: height 0.5s cubic-bezier(0.4,0,0.2,1);
+    min-height: 2px;
+  }
+
+  .lat-label {
+    font-size: 9px;
+    color: var(--muted);
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .latency-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .lat-stat {
+    text-align: center;
+    padding: 8px;
+    background: var(--bg);
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  .lat-stat-label { font-size: 9px; color: var(--muted); letter-spacing: 1px; margin-bottom: 4px; }
+  .lat-stat-value { font-size: 15px; font-weight: 700; color: var(--white); font-family: 'Syne', sans-serif; }
+
+  /* ── ESCALATION ────────────────────────────────── */
+  .escalation-flow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+
+  .esc-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    min-width: 90px;
+  }
+
+  .esc-node-name { font-size: 11px; color: var(--text); }
+  .esc-node-val  { font-size: 18px; font-weight: 800; font-family: 'Syne', sans-serif; color: var(--white); }
+  .esc-node-sub  { font-size: 9px; color: var(--muted); }
+
+  .esc-arrow {
+    font-size: 16px;
+    color: var(--amber);
+    flex-shrink: 0;
+  }
+
+  .esc-reasons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .esc-reason {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 11px;
+  }
+
+  .esc-reason-name { color: var(--muted); }
+  .esc-reason-val  { color: var(--amber); font-weight: 600; }
+
+  /* ── RECENT REQUESTS TABLE ─────────────────────── */
+  .requests-table { grid-column: span 4; }
+
+  .rtable {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .rtable th {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-weight: 500;
+  }
+
+  .rtable td {
+    padding: 10px 12px;
+    font-size: 11px;
+    border-bottom: 1px solid rgba(26,37,64,0.6);
+    color: var(--text);
+    vertical-align: middle;
+  }
+
+  .rtable tr:last-child td { border-bottom: none; }
+
+  .rtable tr { transition: background 0.1s; }
+  .rtable tr:hover td { background: rgba(0,194,212,0.04); }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  .badge-ok      { background: rgba(34,212,122,0.15); color: var(--green); border: 1px solid rgba(34,212,122,0.3); }
+  .badge-error   { background: rgba(240,82,82,0.15);  color: var(--red);   border: 1px solid rgba(240,82,82,0.3); }
+  .badge-escalated { background: rgba(245,166,35,0.15); color: var(--amber); border: 1px solid rgba(245,166,35,0.3); }
+  .badge-fast    { background: rgba(34,212,122,0.12);  color: var(--green);  border: 1px solid rgba(34,212,122,0.25); }
+  .badge-reason  { background: rgba(155,109,255,0.12); color: var(--purple); border: 1px solid rgba(155,109,255,0.25); }
+  .badge-oracle  { background: rgba(245,166,35,0.12);  color: var(--amber);  border: 1px solid rgba(245,166,35,0.25); }
+
+  .ts-cell { color: var(--muted); font-size: 10px; }
+
+  .latency-cell { color: var(--teal); font-weight: 600; }
+
+  .confidence-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .conf-track {
+    width: 48px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .conf-fill {
+    height: 100%;
+    background: var(--teal);
+    border-radius: 2px;
+  }
+
+  /* ── ERROR FLASH ───────────────────────────────── */
+  .error-banner {
+    display: none;
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: rgba(240,82,82,0.15);
+    border: 1px solid var(--red);
+    border-radius: 4px;
+    padding: 12px 18px;
+    font-size: 12px;
+    color: var(--red);
+    z-index: 999;
+  }
+
+  /* ── LOADING SHIMMER ───────────────────────────── */
+  .shimmer {
+    background: linear-gradient(90deg, var(--surface) 25%, var(--border) 50%, var(--surface) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 3px;
+  }
+
+  @keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* ── ANIMATIONS ────────────────────────────────── */
+  .fade-in {
+    animation: fadeIn 0.3s ease-out both;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .number-update {
+    animation: flash 0.4s ease-out;
+  }
+
+  @keyframes flash {
+    0%   { color: var(--teal); }
+    100% { color: var(--white); }
+  }
+
+  /* ── SPARKLINE ─────────────────────────────────── */
+  .sparkline-wrap {
+    margin-top: 10px;
+  }
+
+  canvas.sparkline {
+    width: 100%;
+    height: 36px;
+    display: block;
+  }
+
+  /* ── SCROLL ────────────────────────────────────── */
+  .table-scroll {
+    max-height: 340px;
+    overflow-y: auto;
+  }
+
+  .table-scroll::-webkit-scrollbar { width: 4px; }
+  .table-scroll::-webkit-scrollbar-track { background: var(--bg); }
+  .table-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── EMPTY STATE ───────────────────────────────── */
+  .empty {
+    text-align: center;
+    padding: 40px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .empty-icon { font-size: 32px; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <span class="logo-name">optmod</span>
+    <span class="logo-tag">routing dashboard</span>
+  </div>
+  <div class="header-right">
+    <div class="refresh-badge">
+      auto-refresh <span id="countdown">5</span>s
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-label" id="statusLabel">connecting…</span>
+    </div>
+  </div>
+</header>
+
+<!-- TIME RANGE BAR -->
+<div class="time-bar">
+  <span class="time-label">window</span>
+  <button class="time-btn" data-range="50"  onclick="setRange(50)">last 50</button>
+  <button class="time-btn active" data-range="200" onclick="setRange(200)">last 200</button>
+  <button class="time-btn" data-range="1h"  onclick="setRange('1h')">1h</button>
+  <button class="time-btn" data-range="6h"  onclick="setRange('6h')">6h</button>
+  <button class="time-btn" data-range="24h" onclick="setRange('24h')">today</button>
+  <button class="time-btn" data-range="all" onclick="setRange('all')">all time</button>
+
+  <div class="router-badge">
+    <span class="label">router</span>
+    <span class="value" id="routerName">—</span>
+  </div>
+</div>
+
+<!-- MAIN -->
+<main>
+
+  <!-- STAT CARDS ROW -->
+  <div class="stat-card teal fade-in">
+    <div class="stat-label">total requests</div>
+    <div class="stat-value" id="statTotal">—</div>
+    <div class="stat-sub"><span class="teal" id="statRpm">—</span> req/min</div>
+  </div>
+
+  <div class="stat-card green fade-in" style="animation-delay:0.05s">
+    <div class="stat-label">success rate</div>
+    <div class="stat-value" id="statSuccess">—</div>
+    <div class="stat-sub"><span id="statSuccessAbs" class="up">—</span> succeeded</div>
+  </div>
+
+  <div class="stat-card amber fade-in" style="animation-delay:0.1s">
+    <div class="stat-label">escalation rate</div>
+    <div class="stat-value" id="statEscRate">—</div>
+    <div class="stat-sub"><span id="statEscAbs">—</span> escalated</div>
+  </div>
+
+  <div class="stat-card red fade-in" style="animation-delay:0.15s">
+    <div class="stat-label">error rate</div>
+    <div class="stat-value" id="statErrRate">—</div>
+    <div class="stat-sub"><span id="statErrAbs" class="down">—</span> failed</div>
+  </div>
+
+  <!-- MODEL DISTRIBUTION -->
+  <div class="card model-dist fade-in" style="animation-delay:0.2s">
+    <div class="card-header">
+      <span class="card-title">model distribution</span>
+      <span class="card-meta" id="modelMeta">—</span>
+    </div>
+    <div class="card-body" id="modelDist">
+      <div class="empty"><div class="empty-icon">⬡</div>no data yet</div>
+    </div>
+  </div>
+
+  <!-- TASK TYPES -->
+  <div class="card task-dist fade-in" style="animation-delay:0.25s">
+    <div class="card-header">
+      <span class="card-title">task types</span>
+      <span class="card-meta" id="taskMeta">—</span>
+    </div>
+    <div class="card-body" id="taskDist">
+      <div class="empty"><div class="empty-icon">⬡</div>no data yet</div>
+    </div>
+  </div>
+
+  <!-- LATENCY -->
+  <div class="card latency-card fade-in" style="animation-delay:0.3s">
+    <div class="card-header">
+      <span class="card-title">latency</span>
+      <span class="card-meta">ms</span>
+    </div>
+    <div class="card-body">
+      <div class="latency-bars" id="latencyBars"></div>
+      <div class="latency-stats" id="latencyStats">
+        <div class="lat-stat"><div class="lat-stat-label">P50</div><div class="lat-stat-value" id="p50">—</div></div>
+        <div class="lat-stat"><div class="lat-stat-label">P90</div><div class="lat-stat-value" id="p90">—</div></div>
+        <div class="lat-stat"><div class="lat-stat-label">P99</div><div class="lat-stat-value" id="p99">—</div></div>
+        <div class="lat-stat"><div class="lat-stat-label">AVG</div><div class="lat-stat-value" id="avgLat">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ESCALATION FLOW -->
+  <div class="card escalation-card fade-in" style="animation-delay:0.35s">
+    <div class="card-header">
+      <span class="card-title">escalation flow</span>
+      <span class="card-meta" id="escMeta">—</span>
+    </div>
+    <div class="card-body">
+      <div class="escalation-flow" id="escFlow">
+        <div class="empty" style="width:100%;padding:20px">no escalations yet</div>
+      </div>
+      <div class="esc-reasons" id="escReasons"></div>
+    </div>
+  </div>
+
+  <!-- RECENT REQUESTS TABLE -->
+  <div class="card requests-table fade-in" style="animation-delay:0.4s">
+    <div class="card-header">
+      <span class="card-title">recent requests</span>
+      <span class="card-meta" id="tableMeta">last 20</span>
+    </div>
+    <div class="table-scroll">
+      <table class="rtable">
+        <thead>
+          <tr>
+            <th>time</th>
+            <th>task</th>
+            <th>difficulty</th>
+            <th>model</th>
+            <th>latency</th>
+            <th>tokens</th>
+            <th>escalated</th>
+            <th>status</th>
+            <th>confidence</th>
+            <th>router</th>
+          </tr>
+        </thead>
+        <tbody id="requestsBody">
+          <tr><td colspan="10" class="empty"><div class="empty-icon">⬡</div>awaiting data</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<div class="error-banner" id="errorBanner">⚠ cannot reach optmod API</div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────
+const REFRESH_INTERVAL = 5000;   // ms
+const API_BASE = '';              // same origin
+
+// ── STATE ─────────────────────────────────────────
+let currentRange = 200;
+let countdownVal = 5;
+let refreshTimer = null;
+let countdownTimer = null;
+let prevTotal = 0;
+
+// ── COLOR MAP ─────────────────────────────────────
+const MODEL_COLORS = {
+  'qwen2.5:7b':  '#22D47A',
+  'qwen3:8b':    '#9B6DFF',
+  'deepseek-v4': '#F5A623',
+};
+const TASK_COLORS = {
+  'tool_call': '#00C2D4',
+  'code':      '#9B6DFF',
+  'reason':    '#F5A623',
+  'extract':   '#22D47A',
+  'summarize': '#5B8FFF',
+  'search':    '#F05252',
+  'general':   '#4A6080',
+};
+const TIER_CLASS = {
+  'fast':      'tier-fast',
+  'reasoning': 'tier-reason',
+  'oracle':    'tier-oracle',
+};
+const TIER_NAME = {
+  'fast':      'FAST',
+  'reasoning': 'REASON',
+  'oracle':    'ORACLE',
+};
+
+// ── RANGE SELECTOR ────────────────────────────────
+function setRange(r) {
+  currentRange = r;
+  document.querySelectorAll('.time-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.range == r);
+  });
+  fetchData();
+}
+
+// ── COUNTDOWN ────────────────────────────────────
+function startCountdown() {
+  clearInterval(countdownTimer);
+  countdownVal = REFRESH_INTERVAL / 1000;
+  document.getElementById('countdown').textContent = countdownVal;
+  countdownTimer = setInterval(() => {
+    countdownVal = Math.max(0, countdownVal - 1);
+    document.getElementById('countdown').textContent = countdownVal;
+  }, 1000);
+}
+
+// ── FETCH ─────────────────────────────────────────
+async function fetchData() {
+  startCountdown();
+  try {
+    const url = `${API_BASE}/api/stats?range=${currentRange}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    render(data);
+    setStatus(true);
+    document.getElementById('errorBanner').style.display = 'none';
+  } catch(e) {
+    setStatus(false);
+    document.getElementById('errorBanner').style.display = 'block';
+    // For demo: render mock data so the UI is visible
+    render(mockData());
+  }
+}
+
+function setStatus(ok) {
+  const dot = document.getElementById('statusDot');
+  const label = document.getElementById('statusLabel');
+  dot.className = 'status-dot' + (ok ? '' : ' error');
+  label.textContent = ok ? 'live' : 'disconnected';
+}
+
+// ── RENDER ────────────────────────────────────────
+function render(d) {
+  renderStats(d);
+  renderRouter(d);
+  renderModelDist(d);
+  renderTaskDist(d);
+  renderLatency(d);
+  renderEscalation(d);
+  renderTable(d);
+}
+
+function renderStats(d) {
+  const total = d.total_requests || 0;
+  const el = document.getElementById('statTotal');
+  if (total !== prevTotal) {
+    el.textContent = fmt(total);
+    el.classList.remove('number-update');
+    void el.offsetWidth;
+    el.classList.add('number-update');
+    prevTotal = total;
+  }
+  document.getElementById('statRpm').textContent = (d.rpm || 0).toFixed(1);
+  const sr = d.success_rate ?? 0;
+  document.getElementById('statSuccess').textContent = pct(sr);
+  document.getElementById('statSuccessAbs').textContent = fmt(d.success_count || 0);
+  const er = d.escalation_rate ?? 0;
+  document.getElementById('statEscRate').textContent = pct(er);
+  document.getElementById('statEscAbs').textContent = fmt(d.escalation_count || 0);
+  const err = d.error_rate ?? 0;
+  document.getElementById('statErrRate').textContent = pct(err);
+  document.getElementById('statErrAbs').textContent = fmt(d.error_count || 0);
+}
+
+function renderRouter(d) {
+  document.getElementById('routerName').textContent = (d.router || '—').replace('Router','');
+}
+
+function renderModelDist(d) {
+  const models = d.model_distribution || {};
+  const total  = Object.values(models).reduce((a,b)=>a+b,0) || 1;
+  const sorted = Object.entries(models).sort((a,b)=>b[1]-a[1]);
+  if (!sorted.length) return;
+  document.getElementById('modelMeta').textContent = `${sorted.length} models`;
+
+  const html = sorted.map(([name, count]) => {
+    const p = count / total * 100;
+    const color = MODEL_COLORS[name] || '#4A6080';
+    const tier = d.model_tiers?.[name] || 'fast';
+    const tierClass = TIER_CLASS[tier] || 'tier-fast';
+    const tierLabel = TIER_NAME[tier] || tier.toUpperCase();
+    return `
+      <div class="model-row">
+        <span class="model-tier ${tierClass}">${tierLabel}</span>
+        <span class="model-name">${name}</span>
+        <div class="model-bar-track">
+          <div class="model-bar-fill" style="width:${p}%;background:${color}"></div>
+        </div>
+        <span class="model-count">${fmt(count)}</span>
+        <span class="model-pct">${p.toFixed(0)}%</span>
+      </div>`;
+  }).join('');
+  document.getElementById('modelDist').innerHTML = html;
+}
+
+function renderTaskDist(d) {
+  const tasks = d.task_distribution || {};
+  const total  = Object.values(tasks).reduce((a,b)=>a+b,0) || 1;
+  const sorted = Object.entries(tasks).sort((a,b)=>b[1]-a[1]);
+  if (!sorted.length) return;
+  document.getElementById('taskMeta').textContent = `${sorted.length} types`;
+
+  const html = `<div class="task-grid">` + sorted.map(([name, count]) => {
+    const p = count / total * 100;
+    const color = TASK_COLORS[name] || '#4A6080';
+    return `
+      <div class="task-cell">
+        <span class="task-name">
+          <span class="task-dot" style="background:${color}"></span>
+          ${name}
+        </span>
+        <span class="task-pct">${p.toFixed(0)}%</span>
+      </div>`;
+  }).join('') + `</div>`;
+  document.getElementById('taskDist').innerHTML = html;
+}
+
+function renderLatency(d) {
+  // Histogram buckets
+  const buckets = d.latency_buckets || {};
+  const labels  = ['<100ms','100-500','500-1s','1-3s','3-10s','>10s'];
+  const keys    = ['lt100','lt500','lt1000','lt3000','lt10000','gt10000'];
+  const vals    = keys.map(k => buckets[k] || 0);
+  const maxVal  = Math.max(...vals, 1);
+
+  const barsHtml = vals.map((v, i) => {
+    const h = Math.max(4, (v / maxVal) * 72);
+    const color = i < 2 ? '#22D47A' : i < 4 ? '#F5A623' : '#F05252';
+    return `
+      <div class="lat-bar-wrap">
+        <div class="lat-bar" style="height:${h}px;background:${color};opacity:${v?1:0.2}"></div>
+        <div class="lat-label">${labels[i]}</div>
+      </div>`;
+  }).join('');
+  document.getElementById('latencyBars').innerHTML = barsHtml;
+
+  const lat = d.latency_stats || {};
+  document.getElementById('p50').textContent   = fmtMs(lat.p50);
+  document.getElementById('p90').textContent   = fmtMs(lat.p90);
+  document.getElementById('p99').textContent   = fmtMs(lat.p99);
+  document.getElementById('avgLat').textContent = fmtMs(lat.avg);
+}
+
+function renderEscalation(d) {
+  const esc = d.escalation_flows || [];
+  const reasons = d.escalation_reasons || {};
+
+  if (!esc.length) {
+    document.getElementById('escFlow').innerHTML = `<div class="empty" style="width:100%;padding:20px">no escalations in this window</div>`;
+    document.getElementById('escReasons').innerHTML = '';
+    document.getElementById('escMeta').textContent = '0 escalations';
+    return;
+  }
+
+  document.getElementById('escMeta').textContent = `${fmt(d.escalation_count || 0)} total`;
+
+  // Flow: show tier transitions
+  const flowHtml = esc.map((node, i) => {
+    const isLast = i === esc.length - 1;
+    return `
+      <div class="esc-node">
+        <div class="esc-node-name">${node.model}</div>
+        <div class="esc-node-val">${fmt(node.count)}</div>
+        <div class="esc-node-sub">routes</div>
+      </div>
+      ${!isLast ? '<div class="esc-arrow">→</div>' : ''}`;
+  }).join('');
+  document.getElementById('escFlow').innerHTML = flowHtml;
+
+  // Reasons
+  const reasonHtml = Object.entries(reasons).map(([r, c]) => `
+    <div class="esc-reason">
+      <span class="esc-reason-name">${r}</span>
+      <span class="esc-reason-val">${fmt(c)}</span>
+    </div>`).join('');
+  document.getElementById('escReasons').innerHTML = reasonHtml;
+}
+
+function renderTable(d) {
+  const rows = (d.recent_requests || []).slice(0, 20);
+  if (!rows.length) {
+    document.getElementById('requestsBody').innerHTML =
+      `<tr><td colspan="10" class="empty"><div class="empty-icon">⬡</div>no requests yet</td></tr>`;
+    return;
+  }
+  document.getElementById('tableMeta').textContent = `last ${rows.length}`;
+
+  const html = rows.map(r => {
+    const tier = d.model_tiers?.[r.final_model] || 'fast';
+    const modelBadge = `badge-${tier === 'oracle' ? 'oracle' : tier === 'reasoning' ? 'reason' : 'fast'}`;
+    const statusBadge = r.ok ? 'badge-ok' : 'badge-error';
+    const escBadge = r.escalation_count > 0 ? `<span class="badge badge-escalated">${r.escalation_count}×</span>` : `<span style="color:var(--muted)">—</span>`;
+    const conf = ((r.confidence || 0) * 100).toFixed(0);
+
+    return `
+      <tr>
+        <td class="ts-cell">${fmtTs(r.ts)}</td>
+        <td><span style="color:${TASK_COLORS[r.task_type]||'#4A6080'}">${r.task_type}</span></td>
+        <td><span style="color:var(--muted)">${r.difficulty}</span></td>
+        <td><span class="badge ${modelBadge}">${r.final_model}</span></td>
+        <td class="latency-cell">${fmtMs(r.latency_ms)}</td>
+        <td style="color:var(--muted)">${fmt((r.prompt_tokens||0)+(r.completion_tokens||0))}</td>
+        <td>${escBadge}</td>
+        <td><span class="badge ${statusBadge}">${r.ok ? 'OK' : r.error_type || 'ERR'}</span></td>
+        <td>
+          <div class="confidence-bar">
+            <div class="conf-track"><div class="conf-fill" style="width:${conf}%"></div></div>
+            <span style="font-size:10px;color:var(--muted)">${conf}%</span>
+          </div>
+        </td>
+        <td style="color:var(--muted);font-size:10px">${(r.router||'').replace('Router','')}</td>
+      </tr>`;
+  }).join('');
+  document.getElementById('requestsBody').innerHTML = html;
+}
+
+// ── FORMATTERS ────────────────────────────────────
+function fmt(n) { return (n||0).toLocaleString(); }
+function pct(n) { return ((n||0)*100).toFixed(1)+'%'; }
+function fmtMs(n) {
+  if (!n && n !== 0) return '—';
+  if (n < 1000) return Math.round(n) + 'ms';
+  return (n/1000).toFixed(1) + 's';
+}
+function fmtTs(ts) {
+  if (!ts) return '—';
+  try {
+    const d = new Date(ts);
+    return d.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  } catch { return ts; }
+}
+
+// ── MOCK DATA (shown when API unreachable) ─────────
+function mockData() {
+  const now = Date.now();
+  const reqs = Array.from({length:20}, (_,i) => ({
+    ts: new Date(now - i * 8000).toISOString(),
+    task_type: ['reason','extract','tool_call','code','summarize','search'][i%6],
+    difficulty: ['easy','medium','hard'][i%3],
+    final_model: ['qwen2.5:7b','qwen3:8b','deepseek-v4'][i%3],
+    latency_ms: 200 + Math.random()*2000,
+    prompt_tokens: 400 + Math.floor(Math.random()*800),
+    completion_tokens: 100 + Math.floor(Math.random()*400),
+    escalation_count: i%5===0 ? 1 : 0,
+    ok: i%7!==0,
+    error_type: i%7===0 ? 'timeout' : null,
+    confidence: 0.65 + Math.random()*0.35,
+    router: 'RuleBasedRouter',
+  }));
+
+  return {
+    total_requests: 1842,
+    rpm: 3.7,
+    success_rate: 0.934,
+    success_count: 1720,
+    escalation_rate: 0.087,
+    escalation_count: 160,
+    error_rate: 0.066,
+    error_count: 122,
+    router: 'RuleBasedRouter',
+    model_tiers: {
+      'qwen2.5:7b': 'fast',
+      'qwen3:8b':   'reasoning',
+      'deepseek-v4':'oracle',
+    },
+    model_distribution: {
+      'qwen2.5:7b':  980,
+      'qwen3:8b':    654,
+      'deepseek-v4': 208,
+    },
+    task_distribution: {
+      'extract':   420,
+      'tool_call': 380,
+      'reason':    310,
+      'code':      280,
+      'summarize': 240,
+      'general':   212,
+    },
+    latency_buckets: {
+      lt100: 120, lt500: 680, lt1000: 540, lt3000: 380, lt10000: 100, gt10000: 22,
+    },
+    latency_stats: { p50: 480, p90: 2100, p99: 7800, avg: 920 },
+    escalation_flows: [
+      { model: 'qwen2.5:7b', count: 160 },
+      { model: 'qwen3:8b',   count: 98  },
+      { model: 'deepseek-v4',count: 42  },
+    ],
+    escalation_reasons: {
+      'rate_limit': 88,
+      'timeout':    48,
+      'server_error': 24,
+    },
+    recent_requests: reqs,
+  };
+}
+
+// ── BOOT ──────────────────────────────────────────
+fetchData();
+refreshTimer = setInterval(fetchData, REFRESH_INTERVAL);
+</script>
+</body>
+</html>
