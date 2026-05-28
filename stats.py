@@ -4,12 +4,29 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 
+import yaml
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 stats_router = APIRouter()
 
 LOG_PATH = Path("routing.log.jsonl")
+
+# Authoritative tier map read once from config.yaml at import time.
+# Falls back to empty dict (heuristics take over) if config is unavailable.
+def _load_tier_map() -> dict[str, str]:
+    try:
+        raw = yaml.safe_load(Path("config.yaml").read_text())
+        return {m["name"]: m["tier_name"] for m in raw.get("models", [])}
+    except Exception:
+        return {}
+
+_TIER_MAP: dict[str, str] = _load_tier_map()
+
+
+def reload_tier_map() -> None:
+    global _TIER_MAP
+    _TIER_MAP = _load_tier_map()
 
 
 def _read_log() -> list[dict]:
@@ -62,6 +79,9 @@ def _percentile(data: list[float], p: float) -> float:
 
 
 def _infer_tier(model_name: str) -> str:
+    if model_name in _TIER_MAP:
+        return _TIER_MAP[model_name]
+    # Heuristic fallback for models not in config (e.g. seen in old log entries)
     name = model_name.lower()
     if any(x in name for x in ("gpt-oss", "qwen2.5")):
         return "fast"

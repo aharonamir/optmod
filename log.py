@@ -15,5 +15,9 @@ class RoutingLog:
             with self._path.open("a", encoding="utf-8") as f:
                 f.write(line)
 
+    def clear(self) -> None:
+        with self._lock:
+            self._path.write_text("")
+
     def flush(self) -> None:
         pass

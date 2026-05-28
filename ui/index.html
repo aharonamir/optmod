@@ -168,7 +168,6 @@
   }
 
   .router-badge {
-    margin-left: auto;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -674,6 +673,25 @@
   .pause-btn:hover { color: var(--text); border-color: var(--teal-dim); }
   .pause-btn.paused { color: var(--amber); border-color: var(--amber); background: rgba(245,166,35,0.08); }
 
+  /* Toolbar action buttons (time bar) */
+  .action-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+  }
+
+  .action-btn:hover { color: var(--text); border-color: var(--teal-dim); }
+  .action-btn:disabled { opacity: 0.4; cursor: default; }
+  .action-btn.danger:hover { color: var(--red); border-color: var(--red); background: rgba(240,82,82,0.08); }
+  .action-btn.success { color: var(--green); border-color: var(--green); }
+
   /* ── ERROR FLASH ───────────────────────────────── */
   .error-banner {
     display: none;
@@ -771,9 +789,13 @@
   <button class="time-btn" data-range="24h" onclick="setRange('24h')">today</button>
   <button class="time-btn" data-range="all" onclick="setRange('all')">all time</button>
 
-  <div class="router-badge">
-    <span class="label">router</span>
-    <span class="value" id="routerName">—</span>
+  <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+    <button class="action-btn danger" id="clearBtn" onclick="clearLog()">⊘ CLEAR LOG</button>
+    <button class="action-btn" id="reloadBtn" onclick="reloadServer()">⟳ RELOAD</button>
+    <div class="router-badge" style="margin-left:8px">
+      <span class="label">router</span>
+      <span class="value" id="routerName">—</span>
+    </div>
   </div>
 </div>
 
@@ -1382,6 +1404,49 @@ function mockData() {
     },
     recent_requests: reqs,
   };
+}
+
+// ── LOG CLEAR ─────────────────────────────────────
+async function clearLog() {
+  const btn = document.getElementById('clearBtn');
+  if (!confirm('Clear routing.log.jsonl? All recorded requests will be lost.')) return;
+  btn.disabled = true;
+  btn.textContent = 'clearing…';
+  try {
+    const r = await fetch(`${API_BASE}/optmod/log/clear`, {method: 'POST'});
+    if (r.ok) {
+      seenRowKeys.clear();
+      btn.textContent = '✓ CLEARED';
+      btn.classList.add('success');
+      setTimeout(() => {
+        btn.textContent = '⊘ CLEAR LOG';
+        btn.classList.remove('success');
+        btn.disabled = false;
+      }, 1500);
+      fetchData();
+    } else {
+      throw new Error(r.status);
+    }
+  } catch(e) {
+    btn.textContent = '⊘ CLEAR LOG';
+    btn.disabled = false;
+  }
+}
+
+// ── RELOAD ────────────────────────────────────────
+async function reloadServer() {
+  const btn = document.getElementById('reloadBtn');
+  btn.disabled = true;
+  btn.textContent = 'reloading…';
+  try {
+    await fetch(`${API_BASE}/optmod/restart`, {method: 'POST'});
+  } catch(_) {}
+  // Give uvicorn --reload a moment to restart, then re-fetch
+  setTimeout(() => {
+    btn.textContent = '⟳ RELOAD';
+    btn.disabled = false;
+    fetchData();
+  }, 2500);
 }
 
 // ── BOOT ──────────────────────────────────────────

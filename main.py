@@ -2,6 +2,7 @@ import hashlib
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -150,6 +151,22 @@ async def status() -> JSONResponse:
             for m in _registry.all()
         ],
     })
+
+
+@app.post("/optmod/log/clear")
+async def clear_log() -> JSONResponse:
+    _log.clear()
+    return JSONResponse(content={"ok": True})
+
+
+@app.post("/optmod/restart")
+async def restart_server() -> JSONResponse:
+    # Touch main.py so uvicorn --reload picks up the change and restarts the worker.
+    # Without --reload this is a no-op; restart the process manually in that case.
+    from optmod.stats import reload_tier_map
+    reload_tier_map()
+    Path("main.py").touch()
+    return JSONResponse(content={"ok": True, "message": "reloading…"})
 
 
 @app.post("/optmod/router/{name}")
