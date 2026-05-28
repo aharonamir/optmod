@@ -13,10 +13,11 @@ The calling agent never knows a proxy is in the middle.
 ## Running the Server
 
 ```bash
-uv run uvicorn main:app --host 0.0.0.0 --port 8765 --reload
+uv run --env-file .env uvicorn main:app --host 0.0.0.0 --port 8765 --reload
 ```
 
-API keys are loaded from `.env` at startup (via `api_key_env` in `config.yaml`).
+API keys are in `.env` and must be passed via `--env-file .env` (uv does not auto-load `.env`).
+They are resolved at startup via `api_key_env` in `config.yaml`.
 **Important:** uvicorn `--reload` only watches `.py` files. After changing `config.yaml`,
 do a hard restart (Ctrl+C → re-run).
 

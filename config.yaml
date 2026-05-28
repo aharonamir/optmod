@@ -1,5 +1,5 @@
 # Active router: passthrough | rule_based | decision_tree
-router: rule_based
+router: trouter
 
 # Oracle model — quality ceiling, used as primary
 primary_model: deepseek/deepseek-v4-flash

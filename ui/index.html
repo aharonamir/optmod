@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>optmod · routing dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg:       #080C14;
     --surface:  #0D1420;
-    --border:   #1A2540;
+    --border:   #1E2B47;
     --teal:     #00C2D4;
     --teal-dim: #008E9E;
     --amber:    #F5A623;
@@ -18,7 +18,7 @@
     --red:      #F05252;
     --purple:   #9B6DFF;
     --text:     #C8D8F0;
-    --muted:    #4A6080;
+    --muted:    #5C7090;
     --white:    #FFFFFF;
   }
 
@@ -30,7 +30,7 @@
     background: var(--bg);
     color: var(--text);
     font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
+    font-size: 14px;
     min-height: 100vh;
     overflow-x: hidden;
   }
@@ -44,8 +44,8 @@
       0deg,
       transparent,
       transparent 2px,
-      rgba(0,194,212,0.015) 2px,
-      rgba(0,194,212,0.015) 4px
+      rgba(0,194,212,0.008) 2px,
+      rgba(0,194,212,0.008) 4px
     );
     pointer-events: none;
     z-index: 1000;
@@ -167,22 +167,43 @@
     color: var(--teal);
   }
 
-  .router-badge {
+  .router-switcher {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0;
     font-size: 11px;
   }
 
-  .router-badge .label { color: var(--muted); }
-  .router-badge .value {
-    padding: 3px 10px;
+  .router-switcher .rs-label {
+    color: var(--muted);
+    margin-right: 10px;
+    letter-spacing: 1px;
+  }
+
+  .router-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-right: none;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 5px 13px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .router-btn:first-of-type { border-radius: 4px 0 0 4px; }
+  .router-btn:last-of-type  { border-right: 1px solid var(--border); border-radius: 0 4px 4px 0; }
+
+  .router-btn:hover { color: var(--text); border-color: var(--purple); background: rgba(155,109,255,0.06); }
+
+  .router-btn.active {
     background: rgba(155,109,255,0.15);
-    border: 1px solid rgba(155,109,255,0.4);
-    border-radius: 3px;
+    border-color: rgba(155,109,255,0.5);
     color: var(--purple);
     font-weight: 600;
-    letter-spacing: 1px;
   }
 
   /* ── MAIN GRID ─────────────────────────────────── */
@@ -545,8 +566,8 @@
 
   .rtable td {
     padding: 9px 12px;
-    font-size: 11px;
-    border-bottom: 1px solid rgba(26,37,64,0.6);
+    font-size: 12px;
+    border-bottom: 1px solid rgba(30,43,71,0.7);
     color: var(--text);
     vertical-align: middle;
   }
@@ -586,7 +607,7 @@
   /* Model badge in table: constrained width with ellipsis */
   .model-badge {
     display: inline-block;
-    max-width: 130px;
+    max-width: 160px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -623,16 +644,16 @@
 
   /* Reason cell: truncated with tooltip */
   .reason-cell {
-    max-width: 220px;
+    max-width: 280px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--muted);
-    font-size: 10px;
+    font-size: 11px;
     cursor: default;
   }
 
-  .ts-cell { color: var(--muted); font-size: 10px; white-space: nowrap; }
+  .ts-cell { color: var(--muted); font-size: 11px; white-space: nowrap; }
 
   .latency-cell { color: var(--teal); font-weight: 600; white-space: nowrap; }
 
@@ -643,7 +664,7 @@
   }
 
   .conf-track {
-    width: 48px; height: 4px;
+    width: 56px; height: 4px;
     background: var(--border);
     border-radius: 2px;
     overflow: hidden;
@@ -772,6 +793,10 @@
     <div class="refresh-badge">
       auto-refresh <span id="countdown">5</span>s
     </div>
+    <div style="display:flex;align-items:center;gap:6px;padding:5px 12px;border:1px solid var(--border);border-radius:4px;font-size:11px">
+      <span style="color:var(--muted)">router</span>
+      <span id="routerNameHeader" style="color:var(--purple);font-weight:600;letter-spacing:1px">—</span>
+    </div>
     <div style="display:flex;align-items:center;gap:8px">
       <div class="status-dot" id="statusDot"></div>
       <span class="status-label" id="statusLabel">connecting…</span>
@@ -789,13 +814,15 @@
   <button class="time-btn" data-range="24h" onclick="setRange('24h')">today</button>
   <button class="time-btn" data-range="all" onclick="setRange('all')">all time</button>
 
-  <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+  <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
+    <div class="router-switcher">
+      <span class="rs-label">router</span>
+      <button class="router-btn" data-router="passthrough"  onclick="switchRouter('passthrough')">passthrough</button>
+      <button class="router-btn" data-router="rule_based"   onclick="switchRouter('rule_based')">rule_based</button>
+      <button class="router-btn" data-router="trouter"      onclick="switchRouter('trouter')">trouter</button>
+    </div>
     <button class="action-btn danger" id="clearBtn" onclick="clearLog()">⊘ CLEAR LOG</button>
     <button class="action-btn" id="reloadBtn" onclick="reloadServer()">⟳ RELOAD</button>
-    <div class="router-badge" style="margin-left:8px">
-      <span class="label">router</span>
-      <span class="value" id="routerName">—</span>
-    </div>
   </div>
 </div>
 
@@ -1036,6 +1063,8 @@ async function fetchData() {
         costRates[m.name]    = m.cost_per_1k !== undefined ? m.cost_per_1k : 0;
         modelTierMap[m.name] = m.tier;
       }
+      // Status has the live router; stats has the last-logged router (stale after a switch)
+      if (status.router) data.router = status.router;
     }
     render(data);
     setStatus(true);
@@ -1096,7 +1125,30 @@ function renderStats(d) {
 }
 
 function renderRouter(d) {
-  document.getElementById('routerName').textContent = (d.router || '—').replace('Router', '');
+  const raw  = d.router || '';
+  // Normalise "RuleBasedRouter" → "rule_based", "TRouterRouter" → "trouter", etc.
+  const norm = raw.replace('Router', '')
+                  .replace(/([a-z])([A-Z])/g, '$1_$2')
+                  .toLowerCase()
+                  .replace(/^_/, '');
+  const display = raw.replace('Router', '') || '—';
+  document.getElementById('routerNameHeader').textContent = display;
+  document.querySelectorAll('.router-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.router === norm);
+  });
+}
+
+async function switchRouter(name) {
+  document.querySelectorAll('.router-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.router === name);
+    btn.disabled = true;
+  });
+  try {
+    const r = await fetch(`${API_BASE}/optmod/router/${name}`, {method: 'POST'});
+    if (!r.ok) throw new Error(r.status);
+  } catch(_) {}
+  document.querySelectorAll('.router-btn').forEach(btn => { btn.disabled = false; });
+  fetchData();
 }
 
 function renderModelDist(d) {
@@ -1294,7 +1346,7 @@ function renderTable(d) {
     // Decision reason — truncated, full text on hover
     const reason      = r.decision_reason || '';
     const reasonSafe  = reason.replace(/"/g, "'");
-    const reasonShort = reason.length > 42 ? reason.slice(0, 42) + '…' : reason;
+    const reasonShort = reason.length > 58 ? reason.slice(0, 58) + '…' : reason;
 
     return `
       <tr${isNew ? ' class="row-new"' : ''}>
