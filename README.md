@@ -10,56 +10,140 @@ Point any OpenAI-compatible agent (Hermes, LangChain, etc.) at `http://localhost
 Agent  →  POST /v1/chat/completions  →  optmod
                                            │
                                            ├─ extract features  (<1ms, regex only)
-                                           ├─ route → pick model
+                                           ├─ route → pick model + strategy
                                            ├─ mutate context (e.g. /think prefix)
-                                           ├─ forward to real model (httpx async)
+                                           ├─ forward via OpenRouter (httpx async)
                                            │     └─ on error: escalate up one tier
                                            └─ log to JSONL → return response
 ```
 
-## Model tiers
+## Model pool
 
-| Tier | Model | Provider | Use |
+All models are served through [OpenRouter](https://openrouter.ai). Set `OPENROUTER_API_KEY` in `.env`.
+
+| Tier | Model | Cost / 1k tokens | Use |
 |---|---|---|---|
-| fast (0) | qwen2.5:7b | Ollama (local) | Simple tasks, extract, summarize |
-| reasoning (1) | qwen3:8b | Ollama (local) | Multi-step reasoning, tool calls, Hebrew |
-| oracle (2) | deepseek-v4 | DeepSeek API | Hard tasks, long context, quality ceiling |
+| fast (0) | `openai/gpt-oss-120b:free` | $0.000 | Simple tasks, extract, summarize |
+| reasoning (1) | `arcee-ai/trinity-large-thinking` | $0.00022 | Multi-step reasoning, tool calls, Hebrew |
+| oracle (2) | `deepseek/deepseek-v4-flash` | $0.00014 | Hard tasks, long context, quality ceiling |
 
 Escalation path: `fast → reasoning → oracle → 502`
 
 ## Quickstart
 
 ```bash
-# Prerequisites
-ollama serve &
-ollama pull qwen2.5:7b
-ollama pull qwen3:8b
-export DEEPSEEK_API_KEY=your_key_here
-
-# Install and run
+# 1. Install
 uv venv && uv pip install -e '.[dev]'
-source .venv/bin/activate
-uvicorn main:app --host 0.0.0.0 --port 8765 --reload
-```
 
-```bash
-# Check status
+# 2. Add your OpenRouter key
+echo "OPENROUTER_API_KEY=sk-or-..." >> .env
+
+# 3. Run
+uv run uvicorn main:app --host 0.0.0.0 --port 8765 --reload
+
+# 4. Verify
 curl http://localhost:8765/optmod/status
 
-# Open dashboard
+# 5. Open the dashboard
 open http://localhost:8765/ui
 
-# Send a request
+# 6. Send a request
 curl -X POST http://localhost:8765/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"optmod","messages":[{"role":"user","content":"why does quicksort fail on sorted input?"}]}'
 
-# Swap router at runtime
-curl -X POST http://localhost:8765/optmod/router/passthrough
+# 7. Swap router at runtime (no restart needed)
 curl -X POST http://localhost:8765/optmod/router/rule_based
+curl -X POST http://localhost:8765/optmod/router/trouter
+curl -X POST http://localhost:8765/optmod/router/passthrough
+```
 
-# Stats
-curl "http://localhost:8765/api/stats?range=1h"
+### TRouter — neural net routing (optional)
+
+```bash
+# Install PyTorch + sentence-transformers extras
+uv pip install -e '.[dev,trouter]'
+
+# Activate (loads trouter_weights.pt + all-MiniLM-L6-v2 encoder at startup)
+curl -X POST http://localhost:8765/optmod/router/trouter
+```
+
+## Routers
+
+| Name | Description |
+|---|---|
+| `passthrough` | Always routes to the primary model; no classification |
+| `rule_based` | 9 deterministic rules on task type, difficulty, language, token count |
+| `decision_tree` | scikit-learn tree trained on WildClawBench; falls back to `rule_based` if `routing_policy.pkl` is absent |
+| `trouter` | Neural network router: sentence-BERT encodes the query, a lightweight MLP picks the model weighting quality and cost |
+
+All routers swap at runtime — no restart required.
+
+## Dashboard
+
+Open `http://localhost:8765/ui` for a live dashboard with 5s auto-refresh:
+
+- **Stat cards** — total requests, success rate, escalation rate, error rate
+- **Model distribution** — tier-colored usage bars, per-model cost estimate for the window, savings vs. always routing to oracle
+- **Task types** — distribution of task classifications
+- **Latency histogram** — bucketed with P50/P90/P99/avg
+- **Escalation flow** — which models are being escalated to and why
+- **Recent requests table** — per-request model (with full name tooltip), models-tried chain, cost, latency, status, routing reason (truncated; hover for full text), confidence. New rows slide in animated; a pause/resume button freezes the table without stopping stat updates.
+
+## API endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/v1/chat/completions` | Main proxy — OpenAI wire format |
+| `GET` | `/optmod/status` | Router name, primary model, full model list with costs |
+| `POST` | `/optmod/router/{name}` | Swap router: `passthrough`, `rule_based`, `decision_tree`, `trouter` |
+| `GET` | `/api/stats?range=N` | Aggregated stats from JSONL log (1h, 6h, 24h, last-N, all) |
+| `GET` | `/api/stats/live` | Lightweight live counts for polling |
+| `GET` | `/ui` | Live routing dashboard |
+
+## Project layout
+
+Flat layout — source lives at the project root, importable as `optmod.*`.
+
+```
+main.py               FastAPI app, lifespan, proxy endpoint
+schemas.py            Pydantic + dataclass types
+config.py             Config loader (config.yaml)
+config.yaml           Model pool + router config (all via OpenRouter)
+registry.py           ModelConfig + ModelRegistry
+features.py           FeatureExtractor (<1ms regex classifier)
+forwarder.py          Async httpx forwarder, one client per base_url
+escalation.py         EscalationPolicy
+log.py                Append-only JSONL log
+stats.py              /api/stats aggregation (model_tokens, cost tracking)
+routing/
+  __init__.py         BaseRouter ABC + build_router() factory
+  passthrough.py      PassthroughRouter
+  rule_based.py       RuleBasedRouter (9 rules)
+  decision_tree.py    DecisionTreeRouter (scikit-learn)
+  trouter_router.py   TRouterRouter (neural net, sentence-BERT encoder)
+  train_trouter.py    TRouter training code + route() function
+  trouter_weights.pt  Trained checkpoint
+mutators/             BaseContextMutator, NoopMutator, ThinkingModeMutator
+tests/
+  test_features.py    Unit tests — FeatureExtractor
+  test_routers.py     Unit tests — all routers
+  test_escalation.py  Unit tests — EscalationPolicy
+  test_proxy_e2e.py   Mock e2e tests (respx, no network)
+  test_live_e2e.py    Live e2e tests (real OpenRouter calls, skipped in CI)
+ui/index.html         Self-contained stats dashboard
+.env                  API keys — git-ignored
+```
+
+## Running tests
+
+```bash
+# Mock tests only (no network, fast)
+uv run pytest tests/test_proxy_e2e.py tests/test_routers.py \
+              tests/test_features.py tests/test_escalation.py -v
+
+# All tests including live e2e (requires OPENROUTER_API_KEY in .env)
+uv run pytest tests/ -v -s
 ```
 
 ## Use with Hermes
@@ -73,54 +157,8 @@ base_url: http://localhost:8765/v1
 api_key: optmod
 ```
 
-## API endpoints
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/v1/chat/completions` | Main proxy — OpenAI wire format |
-| `GET` | `/optmod/status` | Router name, primary model, model list |
-| `POST` | `/optmod/router/{name}` | Swap router: `passthrough`, `rule_based`, `decision_tree` |
-| `GET` | `/api/stats?range=N` | Aggregated stats from JSONL log |
-| `GET` | `/api/stats/live` | Lightweight live counts |
-| `GET` | `/ui` | Dashboard |
-
-## Routers
-
-- **passthrough** — always uses the primary model (deepseek-v4), no routing logic
-- **rule_based** — 9 deterministic rules (difficulty, task type, language, token count)
-- **decision_tree** — scikit-learn tree trained on WildClawBench (Phase 2); falls back to rule_based if `routing_policy.pkl` is absent
-
-## Project layout
-
-Flat layout — source lives at the project root, importable as `optmod.*`.
-
-```
-main.py        FastAPI app, lifespan, proxy endpoint
-schemas.py     Pydantic + dataclass types
-config.py      Config loader (config.yaml)
-registry.py    ModelConfig + ModelRegistry
-features.py    FeatureExtractor (<1ms regex classifier)
-forwarder.py   Async httpx forwarder, one client per base_url
-escalation.py  EscalationPolicy
-log.py         Append-only JSONL log
-stats.py       /api/stats aggregation
-routing/       BaseRouter, PassthroughRouter, RuleBasedRouter, DecisionTreeRouter
-mutators/      BaseContextMutator, NoopMutator, ThinkingModeMutator
-tests/         31 tests (features, routers, escalation, e2e with respx)
-config.yaml    Model pool + router config
-ui/index.html  Self-contained stats dashboard
-.venv/         uv virtual environment (not committed)
-```
-
-## Running tests
-
-```bash
-uv run pytest tests/ -v
-```
-
 ## What's not built yet (Phase 2)
 
-- `routing_policy.pkl` — produced by running WildClawBench
+- `routing_policy.pkl` — produced by running WildClawBench; needed to enable the `decision_tree` router
 - Hermes plugin (thin wrapper calling `/optmod/*` endpoints)
-- GLM-4.7-Flash model tier
-- Feedback loop calibration CLI (retrains tree from `routing.log.jsonl`)
+- Feedback loop CLI (retrains TRouter / decision tree from `routing.log.jsonl`)

@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>optmod — Project Overview</title>
+  <style>
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --border:   #2a2d3a;
+      --accent:   #7c6af7;
+      --accent2:  #4dc3ff;
+      --accent3:  #3de8a0;
+      --text:     #e2e4ef;
+      --muted:    #7b7f99;
+      --fast:     #3de8a0;
+      --reasoning:#f5c842;
+      --oracle:   #ff6b6b;
+      --code-bg:  #12151f;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+    }
+
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── HEADER ── */
+    header {
+      background: linear-gradient(135deg, #1a1d27 0%, #12151f 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 60px 40px 48px;
+      text-align: center;
+    }
+
+    .logo-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin-bottom: 20px;
+    }
+
+    header h1 {
+      font-size: 52px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    header .tagline {
+      font-size: 20px;
+      color: var(--muted);
+      margin-top: 12px;
+      max-width: 640px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .pills {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 28px;
+    }
+
+    .pill {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* ── LAYOUT ── */
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 60px 32px;
+    }
+
+    section { margin-bottom: 64px; }
+
+    h2 {
+      font-size: 26px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h2 .icon {
+      font-size: 22px;
+    }
+
+    h3 {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--accent2);
+      margin: 24px 0 10px;
+    }
+
+    p { color: var(--muted); margin-bottom: 14px; }
+    p strong { color: var(--text); }
+
+    /* ── CARDS ── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 22px 24px;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .card p { font-size: 14px; margin: 0; }
+
+    /* ── TIERS ── */
+    .tier-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    @media (max-width: 620px) {
+      .tier-grid { grid-template-columns: 1fr; }
+    }
+
+    .tier-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .tier-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+
+    .tier-card.fast::before   { background: var(--fast); }
+    .tier-card.reasoning::before { background: var(--reasoning); }
+    .tier-card.oracle::before { background: var(--oracle); }
+
+    .tier-badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      display: inline-block;
+      margin-bottom: 12px;
+    }
+
+    .tier-card.fast   .tier-badge { background: #1a3d2e; color: var(--fast); }
+    .tier-card.reasoning .tier-badge { background: #3d3110; color: var(--reasoning); }
+    .tier-card.oracle .tier-badge { background: #3d1515; color: var(--oracle); }
+
+    .tier-name {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .tier-model {
+      font-family: monospace;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .tier-detail {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .tier-detail span { display: block; margin-bottom: 4px; }
+
+    /* ── FLOW DIAGRAM ── */
+    .flow-box {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      font-family: monospace;
+      font-size: 14px;
+      line-height: 2;
+      overflow-x: auto;
+    }
+
+    .flow-step { color: var(--text); }
+    .flow-arrow { color: var(--accent); }
+    .flow-label { color: var(--accent3); }
+    .flow-note  { color: var(--muted); font-size: 12px; }
+
+    /* ── RULES TABLE ── */
+    .rules-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .rules-table th {
+      text-align: left;
+      padding: 10px 14px;
+      background: var(--surface);
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .rules-table td {
+      padding: 11px 14px;
+      border-bottom: 1px solid #1e2130;
+      vertical-align: top;
+    }
+
+    .rules-table tr:last-child td { border-bottom: none; }
+
+    .rules-table code {
+      background: var(--code-bg);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: 12px;
+      color: var(--accent2);
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .tag.fast     { background: #1a3d2e; color: var(--fast); }
+    .tag.reasoning{ background: #3d3110; color: var(--reasoning); }
+    .tag.oracle   { background: #3d1515; color: var(--oracle); }
+
+    /* ── FILE TREE ── */
+    .file-tree {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px 32px;
+      font-family: monospace;
+      font-size: 14px;
+      line-height: 2;
+    }
+
+    .ft-dir  { color: var(--accent2); font-weight: 600; }
+    .ft-file { color: var(--text); }
+    .ft-note { color: var(--muted); font-size: 12px; }
+
+    /* ── ENDPOINTS TABLE ── */
+    .endpoints-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .endpoints-table th {
+      text-align: left;
+      padding: 10px 14px;
+      background: var(--surface);
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .endpoints-table td {
+      padding: 11px 14px;
+      border-bottom: 1px solid #1e2130;
+    }
+
+    .endpoints-table tr:last-child td { border-bottom: none; }
+    .endpoints-table code {
+      background: var(--code-bg);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: 12px;
+      color: var(--accent3);
+    }
+
+    .method {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      font-family: monospace;
+    }
+
+    .method.get  { background: #0d3a20; color: #3de8a0; }
+    .method.post { background: #1a2a4a; color: #4dc3ff; }
+
+    /* ── STACK PILLS ── */
+    .stack-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .stack-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stack-item .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── ESCALATION PATH ── */
+    .escalation-path {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      flex-wrap: wrap;
+      margin: 20px 0;
+    }
+
+    .esc-node {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .esc-node.fast     { border-color: var(--fast);      color: var(--fast); }
+    .esc-node.reasoning{ border-color: var(--reasoning); color: var(--reasoning); }
+    .esc-node.oracle   { border-color: var(--oracle);    color: var(--oracle); }
+    .esc-node.fail     { border-color: var(--muted);     color: var(--muted); }
+
+    .esc-arrow {
+      color: var(--muted);
+      font-size: 18px;
+      padding: 0 8px;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 40px 0;
+    }
+
+    /* ── MOTIVATION BOX ── */
+    .motivation-box {
+      background: linear-gradient(135deg, #1a1d27, #12151f);
+      border: 1px solid var(--accent);
+      border-left: 4px solid var(--accent);
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 24px;
+    }
+
+    .motivation-box p {
+      margin: 0;
+      color: var(--text);
+      font-size: 15px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── HEADER ─────────────────────────────────────────────── -->
+<header>
+  <div class="logo-badge">Local AI Infrastructure</div>
+  <h1>optmod</h1>
+  <p class="tagline">
+    A local OpenAI-compatible routing proxy that selects the optimal LLM
+    for each request — transparently, within a single HTTP call.
+  </p>
+  <div class="pills">
+    <span class="pill">Python 3.11+</span>
+    <span class="pill">FastAPI</span>
+    <span class="pill">httpx async</span>
+    <span class="pill">OpenRouter</span>
+    <span class="pill">sentence-transformers</span>
+    <span class="pill">PyTorch</span>
+    <span class="pill">scikit-learn</span>
+    <span class="pill">uv</span>
+  </div>
+</header>
+
+<!-- ── MAIN ───────────────────────────────────────────────── -->
+<main>
+
+  <!-- MOTIVATION -->
+  <section>
+    <h2><span class="icon">💡</span> Motivation</h2>
+
+    <div class="motivation-box">
+      <p>
+        Every LLM call has a cost — in latency, money, or both.
+        Most agentic frameworks pick one model and use it for everything.
+        <strong>optmod</strong> sits between your agent and the models,
+        classifying each request in under 1ms and routing it to the cheapest
+        model that can actually handle it — escalating transparently on failure,
+        all within a single HTTP call the agent never sees.
+      </p>
+    </div>
+
+    <p>
+      The key insight is <strong>same-turn escalation</strong>: the calling agent sends one request
+      and receives one response. optmod may silently try multiple models internally —
+      starting cheap, stepping up only when needed. This is something a Hermes plugin
+      or client-side retry loop cannot provide, because those approaches require a
+      second round-trip from the agent.
+    </p>
+
+    <p>
+      The proxy is entirely local. It requires no authentication, stores nothing in a
+      database (append-only JSONL log), and is fully OpenAI wire-format compatible —
+      meaning any agent that works with OpenAI can be pointed at optmod with a
+      one-line config change.
+    </p>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- REQUEST FLOW -->
+  <section>
+    <h2><span class="icon">⚡</span> How a request flows</h2>
+
+    <div class="flow-box">
+      <div><span class="flow-step">Agent</span>  <span class="flow-arrow">─── POST /v1/chat/completions ──▶</span>  <span class="flow-label">optmod :8765</span></div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── <span class="flow-label">1. Parse</span>  <span class="flow-note">Pydantic validation</span></div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── <span class="flow-label">2. Extract features</span>  <span class="flow-note">&lt;1ms, regex only</span></div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── <span class="flow-label">3. Route</span>  <span class="flow-note">pick model + mutator</span></div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── <span class="flow-label">4. Mutate context</span>  <span class="flow-note">e.g. prepend /think</span></div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── <span class="flow-label">5. Forward</span>  <span class="flow-note">httpx async, one client per base_url</span></div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── on error → escalate to next tier (up to 2×)</div>
+      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── <span class="flow-label">6. Log + return</span>  <span class="flow-note">one JSONL line, one response</span></div>
+    </div>
+
+    <h3>Escalation path</h3>
+    <div class="escalation-path">
+      <div class="esc-node fast">fast · gpt-oss-120b</div>
+      <span class="esc-arrow">→</span>
+      <div class="esc-node reasoning">reasoning · trinity-large-thinking</div>
+      <span class="esc-arrow">→</span>
+      <div class="esc-node oracle">oracle · deepseek-v4-flash</div>
+      <span class="esc-arrow">→</span>
+      <div class="esc-node fail">502</div>
+    </div>
+    <p>
+      Non-retryable errors (auth, bad request) short-circuit immediately.
+      Retryable errors (rate limit, server error, timeout) trigger escalation to the next tier.
+    </p>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- MODEL TIERS -->
+  <section>
+    <h2><span class="icon">🏆</span> Model tiers</h2>
+
+    <div class="tier-grid">
+      <div class="tier-card fast">
+        <span class="tier-badge">Tier 0</span>
+        <div class="tier-name">Fast</div>
+        <div class="tier-model">openai/gpt-oss-120b:free</div>
+        <div class="tier-detail">
+          <span>Provider: OpenRouter</span>
+          <span>Context: 128 000 tokens</span>
+          <span>Cost: $0.00 (free tier)</span>
+          <span>Use: extract, summarize, simple tasks</span>
+        </div>
+      </div>
+
+      <div class="tier-card reasoning">
+        <span class="tier-badge">Tier 1</span>
+        <div class="tier-name">Reasoning</div>
+        <div class="tier-model">arcee-ai/trinity-large-thinking</div>
+        <div class="tier-detail">
+          <span>Provider: OpenRouter</span>
+          <span>Context: 256 000 tokens</span>
+          <span>Cost: $0.00022 / 1k tokens</span>
+          <span>Use: multi-step reasoning, tool calls, Hebrew</span>
+          <span>Thinking model — internal CoT before answer</span>
+        </div>
+      </div>
+
+      <div class="tier-card oracle">
+        <span class="tier-badge">Tier 2</span>
+        <div class="tier-name">Oracle</div>
+        <div class="tier-model">deepseek/deepseek-v4-flash</div>
+        <div class="tier-detail">
+          <span>Provider: OpenRouter</span>
+          <span>Context: 256 000 tokens</span>
+          <span>Cost: $0.00014 / 1k tokens</span>
+          <span>Use: hard tasks, long context, quality ceiling</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ROUTING RULES -->
+  <section>
+    <h2><span class="icon">🧭</span> Routing rules</h2>
+
+    <p>
+      The <strong>RuleBasedRouter</strong> evaluates 9 deterministic rules in order — first match wins.
+      Features are extracted from the request in &lt;1ms using compiled regex patterns; no ML,
+      no file I/O, no network calls during classification.
+    </p>
+
+    <table class="rules-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Condition</th>
+          <th>Routes to</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td>All models already tried</td>
+          <td><span class="tag oracle">oracle</span></td>
+          <td>All tiers exhausted</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td>Oracle rate-limited + already tried</td>
+          <td><span class="tag reasoning">reasoning</span></td>
+          <td>Step down gracefully</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td><code>difficulty == hard</code> OR <code>tokens &gt; 8000</code></td>
+          <td><span class="tag oracle">oracle</span></td>
+          <td>Hard / long context</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td><code>task_type == reason</code> AND not easy</td>
+          <td><span class="tag reasoning">reasoning</span> + /think</td>
+          <td>Non-trivial reasoning → Qwen3 thinking mode</td>
+        </tr>
+        <tr>
+          <td>5</td>
+          <td><code>task_type == code</code> AND <code>difficulty == hard</code></td>
+          <td><span class="tag oracle">oracle</span></td>
+          <td>Hard code problems</td>
+        </tr>
+        <tr>
+          <td>6</td>
+          <td><code>task_type ∈ {extract, summarize}</code> AND <code>tokens &lt; 3000</code></td>
+          <td><span class="tag fast">fast</span></td>
+          <td>Cheap short tasks</td>
+        </tr>
+        <tr>
+          <td>7</td>
+          <td><code>has_tools == true</code> AND <code>task_type == tool_call</code></td>
+          <td><span class="tag reasoning">reasoning</span></td>
+          <td>Tool call handling</td>
+        </tr>
+        <tr>
+          <td>8</td>
+          <td><code>language == he</code> (Hebrew detected)</td>
+          <td><span class="tag reasoning">reasoning</span></td>
+          <td>Hebrew content</td>
+        </tr>
+        <tr>
+          <td>9</td>
+          <td>Default</td>
+          <td><span class="tag fast">fast</span></td>
+          <td>Low-cost default (confidence 0.7)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Router types</h3>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">passthrough</div>
+        <p>Always routes to the primary model (deepseek/deepseek-v4-flash). No classification. Useful for baseline comparison.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">rule_based</div>
+        <p>9 deterministic rules evaluated in order. Fully interpretable. Safe fallback target if anything goes wrong.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">decision_tree</div>
+        <p>scikit-learn tree trained on WildClawBench. Falls back to <code>rule_based</code> if <code>routing_policy.pkl</code> is absent.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">trouter</div>
+        <p>Neural network router. sentence-BERT encodes the query; a lightweight MLP scores each model weighting quality and cost (configurable α). Loads <code>trouter_weights.pt</code> once at startup.</p>
+      </div>
+    </div>
+    <p style="margin-top:12px;">Routers swap at runtime with a single POST — no restart required.</p>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- PROJECT STRUCTURE -->
+  <section>
+    <h2><span class="icon">📂</span> Project structure</h2>
+
+    <p>
+      Flat layout — the project root <em>is</em> the <code>optmod</code> package.
+      <code>uvicorn main:app</code> works directly from the project root.
+    </p>
+
+    <div class="file-tree">
+      <div><span class="ft-file">main.py</span>         <span class="ft-note">── FastAPI app, lifespan, /v1/chat/completions</span></div>
+      <div><span class="ft-file">schemas.py</span>      <span class="ft-note">── Pydantic + dataclass types</span></div>
+      <div><span class="ft-file">config.py</span>       <span class="ft-note">── Config loader (config.yaml)</span></div>
+      <div><span class="ft-file">config.yaml</span>     <span class="ft-note">── Model pool + router config</span></div>
+      <div><span class="ft-file">registry.py</span>     <span class="ft-note">── ModelConfig + ModelRegistry</span></div>
+      <div><span class="ft-file">features.py</span>     <span class="ft-note">── FeatureExtractor (&lt;1ms regex classifier)</span></div>
+      <div><span class="ft-file">forwarder.py</span>    <span class="ft-note">── Async httpx forwarder, one client per base_url</span></div>
+      <div><span class="ft-file">escalation.py</span>   <span class="ft-note">── EscalationPolicy</span></div>
+      <div><span class="ft-file">log.py</span>          <span class="ft-note">── Append-only JSONL log (threading.Lock)</span></div>
+      <div><span class="ft-file">stats.py</span>        <span class="ft-note">── /api/stats aggregation</span></div>
+      <div>&nbsp;</div>
+      <div><span class="ft-dir">routing/</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">__init__.py</span>       <span class="ft-note">── BaseRouter ABC + build_router() factory</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">context.py</span>        <span class="ft-note">── RoutingContext re-export</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">passthrough.py</span>    <span class="ft-note">── PassthroughRouter</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">rule_based.py</span>     <span class="ft-note">── RuleBasedRouter (9 rules)</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">decision_tree.py</span>  <span class="ft-note">── DecisionTreeRouter (scikit-learn)</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">trouter_router.py</span> <span class="ft-note">── TRouterRouter (neural net, sentence-BERT)</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">train_trouter.py</span>  <span class="ft-note">── TRouter training + route() inference</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">trouter_weights.pt</span><span class="ft-note">── Trained checkpoint (torch)</span></div>
+      <div>&nbsp;</div>
+      <div><span class="ft-dir">mutators/</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">__init__.py</span>      <span class="ft-note">── BaseContextMutator ABC</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">noop.py</span>          <span class="ft-note">── NoopMutator</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">thinking_mode.py</span> <span class="ft-note">── Prepends /think or /no_think</span></div>
+      <div>&nbsp;</div>
+      <div><span class="ft-dir">tests/</span>            <span class="ft-note">── 37 tests: 31 mock (respx) + 6 live (real OpenRouter)</span></div>
+      <div><span class="ft-dir">ui/</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">index.html</span>       <span class="ft-note">── Self-contained stats dashboard</span></div>
+      <div>&nbsp;</div>
+      <div><span class="ft-file">pyproject.toml</span>  <span class="ft-note">── Single dependency file (uv)</span></div>
+      <div><span class="ft-file">routing.log.jsonl</span> <span class="ft-note">── Append-only request log</span></div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- API ENDPOINTS -->
+  <section>
+    <h2><span class="icon">🔌</span> API endpoints</h2>
+
+    <table class="endpoints-table">
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Path</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="method post">POST</span></td>
+          <td><code>/v1/chat/completions</code></td>
+          <td>Main proxy — OpenAI wire format in, OpenAI wire format out</td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span></td>
+          <td><code>/optmod/status</code></td>
+          <td>Router name, active model, full model list</td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span></td>
+          <td><code>/optmod/router/{name}</code></td>
+          <td>Hot-swap router: <code>passthrough</code>, <code>rule_based</code>, <code>decision_tree</code>, <code>trouter</code></td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span></td>
+          <td><code>/api/stats?range=N</code></td>
+          <td>Aggregated stats from JSONL log (1h, 6h, 24h, all, or last-N)</td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span></td>
+          <td><code>/api/stats/live</code></td>
+          <td>Lightweight live counts for polling</td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span></td>
+          <td><code>/ui</code></td>
+          <td>Self-contained stats dashboard (HTML)</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- DASHBOARD -->
+  <section>
+    <h2><span class="icon">📊</span> Live dashboard</h2>
+
+    <p>
+      Open <strong><code>http://localhost:8765/ui</code></strong> for a self-contained dashboard that auto-refreshes every 5 seconds.
+      It fetches <code>/api/stats</code> and <code>/optmod/status</code> in parallel so cost rates are always live.
+    </p>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">Stat cards</div>
+        <p>Total requests, success rate, escalation rate, error rate — with animated number updates.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Model distribution</div>
+        <p>Tier-colored usage bars. Per-model estimated cost for the selected window. Savings vs. always routing to oracle footer.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Task types</div>
+        <p>Breakdown of task classifications (reason, extract, code, summarize, tool_call, …).</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Latency histogram</div>
+        <p>Bucketed bars (&lt;100ms → &gt;10s) with P50 / P90 / P99 / avg summary.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Escalation flow</div>
+        <p>Which models are being tried in sequence and the reasons behind escalations (rate limit, timeout, server error).</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Recent requests table</div>
+        <p>Last 50 requests. Columns: model (short name, full name on hover), models-tried chain, per-request cost, latency, status, routing reason (truncated, hover for full text), confidence bar. New rows slide in animated. Pause/resume button freezes the table without stopping stat card updates.</p>
+      </div>
+    </div>
+
+    <h3>Time range selector</h3>
+    <p>
+      Switch between <strong>last 50</strong>, <strong>last 200</strong>, <strong>1h</strong>, <strong>6h</strong>,
+      <strong>today</strong>, and <strong>all time</strong> — stats cards and charts update instantly.
+      The active router name is shown in the top-right corner of the time bar.
+    </p>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- DESIGN PRINCIPLES -->
+  <section>
+    <h2><span class="icon">🔒</span> Design constraints</h2>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">&lt;1ms feature extraction</div>
+        <p>No ML, no file I/O, no network inside <code>FeatureExtractor.extract()</code>. All regex compiled at import time.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">One HTTP client per base_url</div>
+        <p>httpx.AsyncClient instances are cached by base_url. Never created per request. Connection pools are reused.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Routers never raise</div>
+        <p>All exceptions inside <code>route()</code> are caught. On any error the router falls back to passthrough silently.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Immutable message mutation</div>
+        <p>Mutators return a new message list. Never modify the original in-place. Pydantic <code>model_copy(update=...)</code> used throughout.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Append-only log</div>
+        <p>One JSONL line per request, written with <code>threading.Lock</code>. The file is never rewritten or truncated.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">No secrets in code</div>
+        <p>API keys are resolved from environment variables at startup (<code>api_key_env</code> in config.yaml). Never hardcoded.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- TECH STACK -->
+  <section>
+    <h2><span class="icon">🛠</span> Tech stack</h2>
+
+    <div class="stack-grid">
+      <div class="stack-item"><span class="dot" style="background:#4dc3ff"></span> FastAPI 0.115+</div>
+      <div class="stack-item"><span class="dot" style="background:#4dc3ff"></span> uvicorn</div>
+      <div class="stack-item"><span class="dot" style="background:#3de8a0"></span> httpx (async)</div>
+      <div class="stack-item"><span class="dot" style="background:#3de8a0"></span> Pydantic v2</div>
+      <div class="stack-item"><span class="dot" style="background:#f5c842"></span> PyTorch 2.0+</div>
+      <div class="stack-item"><span class="dot" style="background:#f5c842"></span> sentence-transformers</div>
+      <div class="stack-item"><span class="dot" style="background:#f5c842"></span> scikit-learn</div>
+      <div class="stack-item"><span class="dot" style="background:#ff6b6b"></span> PyYAML</div>
+      <div class="stack-item"><span class="dot" style="background:#7c6af7"></span> uv (packaging)</div>
+      <div class="stack-item"><span class="dot" style="background:#7c6af7"></span> pytest + respx</div>
+      <div class="stack-item"><span class="dot" style="background:#7b7f99"></span> OpenRouter API</div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- PHASE 2 -->
+  <section>
+    <h2><span class="icon">🚧</span> What's not built yet (Phase 2)</h2>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">routing_policy.pkl</div>
+        <p>Trained by running WildClawBench. Enables the <code>decision_tree</code> router without falling back to rule-based.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Hermes plugin</div>
+        <p>Thin wrapper calling <code>/optmod/*</code> control endpoints to surface router telemetry inside Hermes.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Feedback loop CLI</div>
+        <p>Retrains TRouter and the decision tree from <code>routing.log.jsonl</code> to continuously improve routing accuracy.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  optmod &mdash; local OpenAI-compatible routing proxy &mdash;
+  <a href="https://github.com/aharonamir/optmod">github.com/aharonamir/optmod</a>
+</footer>
+
+</body>
+</html>
