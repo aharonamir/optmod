@@ -284,18 +284,23 @@
   .model-row {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 14px;
+    gap: 10px;
+    margin-bottom: 12px;
   }
 
   .model-row:last-child { margin-bottom: 0; }
 
   .model-name {
-    width: 130px;
+    width: 140px;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 12px;
     color: var(--text);
     flex-shrink: 0;
     font-weight: 500;
+    cursor: default;
   }
 
   .model-tier {
@@ -303,8 +308,8 @@
     letter-spacing: 1px;
     padding: 2px 6px;
     border-radius: 2px;
-    margin-right: 4px;
     flex-shrink: 0;
+    white-space: nowrap;
   }
 
   .tier-fast     { background: rgba(34,212,122,0.15); color: var(--green); border: 1px solid rgba(34,212,122,0.3); }
@@ -341,6 +346,28 @@
     flex-shrink: 0;
     font-weight: 600;
   }
+
+  .model-cost {
+    width: 72px;
+    text-align: right;
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+
+  /* Cost summary footer in model dist card */
+  .cost-summary {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    flex-wrap: wrap;
+  }
+
+  .savings-label { color: var(--muted); }
+  .savings-value { color: var(--green); font-weight: 600; }
 
   /* ── TASK TYPE DISTRIBUTION ────────────────────── */
   .task-dist { grid-column: span 2; }
@@ -455,9 +482,19 @@
     border: 1px solid var(--border);
     border-radius: 4px;
     min-width: 90px;
+    max-width: 140px;
   }
 
-  .esc-node-name { font-size: 11px; color: var(--text); }
+  .esc-node-name {
+    font-size: 11px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 120px;
+    cursor: default;
+  }
+
   .esc-node-val  { font-size: 18px; font-weight: 800; font-family: 'Syne', sans-serif; color: var(--white); }
   .esc-node-sub  { font-size: 9px; color: var(--muted); }
 
@@ -504,10 +541,11 @@
     text-align: left;
     border-bottom: 1px solid var(--border);
     font-weight: 500;
+    white-space: nowrap;
   }
 
   .rtable td {
-    padding: 10px 12px;
+    padding: 9px 12px;
     font-size: 11px;
     border-bottom: 1px solid rgba(26,37,64,0.6);
     color: var(--text);
@@ -519,6 +557,16 @@
   .rtable tr { transition: background 0.1s; }
   .rtable tr:hover td { background: rgba(0,194,212,0.04); }
 
+  /* Row slide-in animation for new entries */
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .row-new {
+    animation: slideIn 0.28s ease-out both;
+  }
+
   .badge {
     display: inline-block;
     padding: 2px 8px;
@@ -526,6 +574,7 @@
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.5px;
+    white-space: nowrap;
   }
 
   .badge-ok      { background: rgba(34,212,122,0.15); color: var(--green); border: 1px solid rgba(34,212,122,0.3); }
@@ -535,9 +584,58 @@
   .badge-reason  { background: rgba(155,109,255,0.12); color: var(--purple); border: 1px solid rgba(155,109,255,0.25); }
   .badge-oracle  { background: rgba(245,166,35,0.12);  color: var(--amber);  border: 1px solid rgba(245,166,35,0.25); }
 
-  .ts-cell { color: var(--muted); font-size: 10px; }
+  /* Model badge in table: constrained width with ellipsis */
+  .model-badge {
+    display: inline-block;
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+    cursor: default;
+  }
 
-  .latency-cell { color: var(--teal); font-weight: 600; }
+  /* Tried chain */
+  .tried-chain {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    flex-wrap: nowrap;
+  }
+
+  .tried-arrow {
+    color: var(--amber);
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+
+  /* Cost cell */
+  .cost-cell {
+    color: var(--teal);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .cost-free {
+    color: var(--muted);
+    font-size: 10px;
+  }
+
+  /* Reason cell: truncated with tooltip */
+  .reason-cell {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted);
+    font-size: 10px;
+    cursor: default;
+  }
+
+  .ts-cell { color: var(--muted); font-size: 10px; white-space: nowrap; }
+
+  .latency-cell { color: var(--teal); font-weight: 600; white-space: nowrap; }
 
   .confidence-bar {
     display: flex;
@@ -550,6 +648,7 @@
     background: var(--border);
     border-radius: 2px;
     overflow: hidden;
+    flex-shrink: 0;
   }
 
   .conf-fill {
@@ -557,6 +656,23 @@
     background: var(--teal);
     border-radius: 2px;
   }
+
+  /* Pause button */
+  .pause-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+  }
+
+  .pause-btn:hover { color: var(--text); border-color: var(--teal-dim); }
+  .pause-btn.paused { color: var(--amber); border-color: var(--amber); background: rgba(245,166,35,0.08); }
 
   /* ── ERROR FLASH ───────────────────────────────── */
   .error-banner {
@@ -605,20 +721,9 @@
     100% { color: var(--white); }
   }
 
-  /* ── SPARKLINE ─────────────────────────────────── */
-  .sparkline-wrap {
-    margin-top: 10px;
-  }
-
-  canvas.sparkline {
-    width: 100%;
-    height: 36px;
-    display: block;
-  }
-
   /* ── SCROLL ────────────────────────────────────── */
   .table-scroll {
-    max-height: 340px;
+    max-height: 360px;
     overflow-y: auto;
   }
 
@@ -757,7 +862,10 @@
   <div class="card requests-table fade-in" style="animation-delay:0.4s">
     <div class="card-header">
       <span class="card-title">recent requests</span>
-      <span class="card-meta" id="tableMeta">last 20</span>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="card-meta" id="tableMeta">last 50</span>
+        <button class="pause-btn" id="pauseBtn" onclick="togglePause()">⏸ PAUSE</button>
+      </div>
     </div>
     <div class="table-scroll">
       <table class="rtable">
@@ -765,18 +873,17 @@
           <tr>
             <th>time</th>
             <th>task</th>
-            <th>difficulty</th>
             <th>model</th>
+            <th>tried</th>
+            <th>cost</th>
             <th>latency</th>
-            <th>tokens</th>
-            <th>escalated</th>
             <th>status</th>
+            <th>reason</th>
             <th>confidence</th>
-            <th>router</th>
           </tr>
         </thead>
         <tbody id="requestsBody">
-          <tr><td colspan="10" class="empty"><div class="empty-icon">⬡</div>awaiting data</td></tr>
+          <tr><td colspan="9" class="empty"><div class="empty-icon">⬡</div>awaiting data</td></tr>
         </tbody>
       </table>
     </div>
@@ -784,12 +891,12 @@
 
 </main>
 
-<div class="error-banner" id="errorBanner">⚠ cannot reach optmod API</div>
+<div class="error-banner" id="errorBanner">⚠ cannot reach optmod API — showing mock data</div>
 
 <script>
 // ── CONFIG ────────────────────────────────────────
-const REFRESH_INTERVAL = 5000;   // ms
-const API_BASE = '';              // same origin
+const REFRESH_INTERVAL = 5000;
+const API_BASE = '';
 
 // ── STATE ─────────────────────────────────────────
 let currentRange = 200;
@@ -797,21 +904,16 @@ let countdownVal = 5;
 let refreshTimer = null;
 let countdownTimer = null;
 let prevTotal = 0;
+let paused = false;
+const seenRowKeys = new Set();
+let costRates    = {}; // model name → cost_per_1k
+let modelTierMap = {}; // model name → tier_name  (from /optmod/status)
 
-// ── COLOR MAP ─────────────────────────────────────
-const MODEL_COLORS = {
-  'qwen2.5:7b':  '#22D47A',
-  'qwen3:8b':    '#9B6DFF',
-  'deepseek-v4': '#F5A623',
-};
-const TASK_COLORS = {
-  'tool_call': '#00C2D4',
-  'code':      '#9B6DFF',
-  'reason':    '#F5A623',
-  'extract':   '#22D47A',
-  'summarize': '#5B8FFF',
-  'search':    '#F05252',
-  'general':   '#4A6080',
+// ── COLOR / LABEL MAPS ────────────────────────────
+const TIER_COLORS = {
+  'fast':      '#22D47A',
+  'reasoning': '#9B6DFF',
+  'oracle':    '#F5A623',
 };
 const TIER_CLASS = {
   'fast':      'tier-fast',
@@ -823,6 +925,48 @@ const TIER_NAME = {
   'reasoning': 'REASON',
   'oracle':    'ORACLE',
 };
+const TASK_COLORS = {
+  'tool_call': '#00C2D4',
+  'code':      '#9B6DFF',
+  'reason':    '#F5A623',
+  'extract':   '#22D47A',
+  'summarize': '#5B8FFF',
+  'search':    '#F05252',
+  'general':   '#4A6080',
+};
+
+// ── HELPERS ───────────────────────────────────────
+function shortModel(name) {
+  // "openai/gpt-oss-120b:free" → "gpt-oss-120b"
+  // "arcee-ai/trinity-large-thinking" → "trinity-large-thinking"
+  return (name || '').split('/').pop().split(':')[0];
+}
+
+function tierOf(modelName, fallback) {
+  return modelTierMap[modelName] || fallback || 'oracle';
+}
+
+function fmt(n)   { return (n || 0).toLocaleString(); }
+function pct(n)   { return ((n || 0) * 100).toFixed(1) + '%'; }
+function fmtMs(n) {
+  if (!n && n !== 0) return '—';
+  if (n < 1000) return Math.round(n) + 'ms';
+  return (n / 1000).toFixed(1) + 's';
+}
+function fmtTs(ts) {
+  if (!ts) return '—';
+  try {
+    return new Date(ts).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  } catch { return ts; }
+}
+function fmtDollars(usd) {
+  if (usd === null || usd === undefined) return '—';
+  if (usd === 0) return '$0.00';
+  if (usd < 0.000001) return '<$0.000001';
+  if (usd < 0.001) return '$' + usd.toFixed(5);
+  if (usd < 0.01)  return '$' + usd.toFixed(4);
+  return '$' + usd.toFixed(3);
+}
 
 // ── RANGE SELECTOR ────────────────────────────────
 function setRange(r) {
@@ -831,6 +975,14 @@ function setRange(r) {
     b.classList.toggle('active', b.dataset.range == r);
   });
   fetchData();
+}
+
+// ── PAUSE TOGGLE ──────────────────────────────────
+function togglePause() {
+  paused = !paused;
+  const btn = document.getElementById('pauseBtn');
+  btn.textContent = paused ? '▶ RESUME' : '⏸ PAUSE';
+  btn.classList.toggle('paused', paused);
 }
 
 // ── COUNTDOWN ────────────────────────────────────
@@ -848,23 +1000,44 @@ function startCountdown() {
 async function fetchData() {
   startCountdown();
   try {
-    const url = `${API_BASE}/api/stats?range=${currentRange}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(res.status);
-    const data = await res.json();
+    const [statsRes, statusRes] = await Promise.all([
+      fetch(`${API_BASE}/api/stats?range=${currentRange}`),
+      fetch(`${API_BASE}/optmod/status`),
+    ]);
+    if (!statsRes.ok) throw new Error(statsRes.status);
+    const data = await statsRes.json();
+    if (statusRes.ok) {
+      const status = await statusRes.json();
+      costRates    = {};
+      modelTierMap = {};
+      for (const m of (status.models || [])) {
+        costRates[m.name]    = m.cost_per_1k !== undefined ? m.cost_per_1k : 0;
+        modelTierMap[m.name] = m.tier;
+      }
+    }
     render(data);
     setStatus(true);
     document.getElementById('errorBanner').style.display = 'none';
   } catch(e) {
     setStatus(false);
     document.getElementById('errorBanner').style.display = 'block';
-    // For demo: render mock data so the UI is visible
+    // Fallback mock rates so cost columns are visible offline
+    costRates = {
+      'openai/gpt-oss-120b:free':       0,
+      'arcee-ai/trinity-large-thinking': 0.00022,
+      'deepseek/deepseek-v4-flash':      0.00014,
+    };
+    modelTierMap = {
+      'openai/gpt-oss-120b:free':       'fast',
+      'arcee-ai/trinity-large-thinking': 'reasoning',
+      'deepseek/deepseek-v4-flash':      'oracle',
+    };
     render(mockData());
   }
 }
 
 function setStatus(ok) {
-  const dot = document.getElementById('statusDot');
+  const dot   = document.getElementById('statusDot');
   const label = document.getElementById('statusLabel');
   dot.className = 'status-dot' + (ok ? '' : ' error');
   label.textContent = ok ? 'live' : 'disconnected';
@@ -891,58 +1064,93 @@ function renderStats(d) {
     el.classList.add('number-update');
     prevTotal = total;
   }
-  document.getElementById('statRpm').textContent = (d.rpm || 0).toFixed(1);
-  const sr = d.success_rate ?? 0;
-  document.getElementById('statSuccess').textContent = pct(sr);
+  document.getElementById('statRpm').textContent        = (d.rpm || 0).toFixed(1);
+  document.getElementById('statSuccess').textContent    = pct(d.success_rate ?? 0);
   document.getElementById('statSuccessAbs').textContent = fmt(d.success_count || 0);
-  const er = d.escalation_rate ?? 0;
-  document.getElementById('statEscRate').textContent = pct(er);
-  document.getElementById('statEscAbs').textContent = fmt(d.escalation_count || 0);
-  const err = d.error_rate ?? 0;
-  document.getElementById('statErrRate').textContent = pct(err);
-  document.getElementById('statErrAbs').textContent = fmt(d.error_count || 0);
+  document.getElementById('statEscRate').textContent    = pct(d.escalation_rate ?? 0);
+  document.getElementById('statEscAbs').textContent     = fmt(d.escalation_count || 0);
+  document.getElementById('statErrRate').textContent    = pct(d.error_rate ?? 0);
+  document.getElementById('statErrAbs').textContent     = fmt(d.error_count || 0);
 }
 
 function renderRouter(d) {
-  document.getElementById('routerName').textContent = (d.router || '—').replace('Router','');
+  document.getElementById('routerName').textContent = (d.router || '—').replace('Router', '');
 }
 
 function renderModelDist(d) {
-  const models = d.model_distribution || {};
-  const total  = Object.values(models).reduce((a,b)=>a+b,0) || 1;
-  const sorted = Object.entries(models).sort((a,b)=>b[1]-a[1]);
+  const models      = d.model_distribution || {};
+  const modelTokens = d.model_tokens       || {};
+  const total       = Object.values(models).reduce((a, b) => a + b, 0) || 1;
+  const sorted      = Object.entries(models).sort((a, b) => b[1] - a[1]);
   if (!sorted.length) return;
   document.getElementById('modelMeta').textContent = `${sorted.length} models`;
 
-  const html = sorted.map(([name, count]) => {
-    const p = count / total * 100;
-    const color = MODEL_COLORS[name] || '#4A6080';
-    const tier = d.model_tiers?.[name] || 'fast';
-    const tierClass = TIER_CLASS[tier] || 'tier-fast';
-    const tierLabel = TIER_NAME[tier] || tier.toUpperCase();
+  // Oracle for savings calculation
+  const oracleEntry    = Object.entries(modelTierMap).find(([, t]) => t === 'oracle');
+  const oracleName     = oracleEntry ? oracleEntry[0] : null;
+  const oracleCostPer1k = oracleName ? (costRates[oracleName] || 0) : 0;
+
+  let totalActualCost      = 0;
+  let oracleHypotheticalCost = 0;
+
+  const rowsHtml = sorted.map(([name, count]) => {
+    const p         = count / total * 100;
+    const tier      = tierOf(name, d.model_tiers?.[name]);
+    const color     = TIER_COLORS[tier] || '#4A6080';
+    const tierClass = TIER_CLASS[tier]  || 'tier-oracle';
+    const tierLabel = TIER_NAME[tier]   || tier.toUpperCase();
+    const short     = shortModel(name);
+
+    const tok      = modelTokens[name] || {prompt: 0, completion: 0};
+    const totalTok = (tok.prompt || 0) + (tok.completion || 0);
+    const rate     = costRates[name] !== undefined ? costRates[name] : null;
+    const cost     = rate !== null ? totalTok / 1000 * rate : 0;
+    if (rate !== null) {
+      totalActualCost        += cost;
+      oracleHypotheticalCost += totalTok / 1000 * oracleCostPer1k;
+    }
+
+    const costHtml = rate === null
+      ? '<span style="color:var(--muted)">—</span>'
+      : rate === 0
+        ? '<span style="color:var(--muted);font-size:10px">free</span>'
+        : `<span style="color:var(--teal);font-size:10px">${fmtDollars(cost)}</span>`;
+
     return `
       <div class="model-row">
         <span class="model-tier ${tierClass}">${tierLabel}</span>
-        <span class="model-name">${name}</span>
+        <span class="model-name" title="${name}">${short}</span>
         <div class="model-bar-track">
           <div class="model-bar-fill" style="width:${p}%;background:${color}"></div>
         </div>
         <span class="model-count">${fmt(count)}</span>
         <span class="model-pct">${p.toFixed(0)}%</span>
+        <span class="model-cost">${costHtml}</span>
       </div>`;
   }).join('');
-  document.getElementById('modelDist').innerHTML = html;
+
+  const savings    = Math.max(0, oracleHypotheticalCost - totalActualCost);
+  const savingsHtml = oracleCostPer1k > 0
+    ? `<div class="cost-summary">
+        <span class="savings-label">window cost</span>
+        <span style="color:var(--text);font-weight:600">${fmtDollars(totalActualCost)}</span>
+        <span class="savings-label" style="margin-left:8px">saved vs always-oracle</span>
+        <span class="savings-value">${fmtDollars(savings)}</span>
+       </div>`
+    : '';
+
+  document.getElementById('modelDist').innerHTML = rowsHtml + savingsHtml;
 }
 
 function renderTaskDist(d) {
-  const tasks = d.task_distribution || {};
-  const total  = Object.values(tasks).reduce((a,b)=>a+b,0) || 1;
-  const sorted = Object.entries(tasks).sort((a,b)=>b[1]-a[1]);
+  const tasks  = d.task_distribution || {};
+  const total  = Object.values(tasks).reduce((a, b) => a + b, 0) || 1;
+  const sorted = Object.entries(tasks).sort((a, b) => b[1] - a[1]);
   if (!sorted.length) return;
   document.getElementById('taskMeta').textContent = `${sorted.length} types`;
 
   const html = `<div class="task-grid">` + sorted.map(([name, count]) => {
-    const p = count / total * 100;
+    const p     = count / total * 100;
     const color = TASK_COLORS[name] || '#4A6080';
     return `
       <div class="task-cell">
@@ -957,50 +1165,49 @@ function renderTaskDist(d) {
 }
 
 function renderLatency(d) {
-  // Histogram buckets
   const buckets = d.latency_buckets || {};
-  const labels  = ['<100ms','100-500','500-1s','1-3s','3-10s','>10s'];
-  const keys    = ['lt100','lt500','lt1000','lt3000','lt10000','gt10000'];
+  const labels  = ['<100ms', '100-500', '500-1s', '1-3s', '3-10s', '>10s'];
+  const keys    = ['lt100', 'lt500', 'lt1000', 'lt3000', 'lt10000', 'gt10000'];
   const vals    = keys.map(k => buckets[k] || 0);
   const maxVal  = Math.max(...vals, 1);
 
   const barsHtml = vals.map((v, i) => {
-    const h = Math.max(4, (v / maxVal) * 72);
+    const h     = Math.max(4, (v / maxVal) * 72);
     const color = i < 2 ? '#22D47A' : i < 4 ? '#F5A623' : '#F05252';
     return `
       <div class="lat-bar-wrap">
-        <div class="lat-bar" style="height:${h}px;background:${color};opacity:${v?1:0.2}"></div>
+        <div class="lat-bar" style="height:${h}px;background:${color};opacity:${v ? 1 : 0.2}"></div>
         <div class="lat-label">${labels[i]}</div>
       </div>`;
   }).join('');
   document.getElementById('latencyBars').innerHTML = barsHtml;
 
   const lat = d.latency_stats || {};
-  document.getElementById('p50').textContent   = fmtMs(lat.p50);
-  document.getElementById('p90').textContent   = fmtMs(lat.p90);
-  document.getElementById('p99').textContent   = fmtMs(lat.p99);
+  document.getElementById('p50').textContent    = fmtMs(lat.p50);
+  document.getElementById('p90').textContent    = fmtMs(lat.p90);
+  document.getElementById('p99').textContent    = fmtMs(lat.p99);
   document.getElementById('avgLat').textContent = fmtMs(lat.avg);
 }
 
 function renderEscalation(d) {
-  const esc = d.escalation_flows || [];
+  const esc     = d.escalation_flows  || [];
   const reasons = d.escalation_reasons || {};
 
   if (!esc.length) {
-    document.getElementById('escFlow').innerHTML = `<div class="empty" style="width:100%;padding:20px">no escalations in this window</div>`;
+    document.getElementById('escFlow').innerHTML    = `<div class="empty" style="width:100%;padding:20px">no escalations in this window</div>`;
     document.getElementById('escReasons').innerHTML = '';
-    document.getElementById('escMeta').textContent = '0 escalations';
+    document.getElementById('escMeta').textContent  = '0 escalations';
     return;
   }
 
   document.getElementById('escMeta').textContent = `${fmt(d.escalation_count || 0)} total`;
 
-  // Flow: show tier transitions
   const flowHtml = esc.map((node, i) => {
-    const isLast = i === esc.length - 1;
+    const isLast  = i === esc.length - 1;
+    const short   = shortModel(node.model);
     return `
       <div class="esc-node">
-        <div class="esc-node-name">${node.model}</div>
+        <div class="esc-node-name" title="${node.model}">${short}</div>
         <div class="esc-node-val">${fmt(node.count)}</div>
         <div class="esc-node-sub">routes</div>
       </div>
@@ -1008,7 +1215,6 @@ function renderEscalation(d) {
   }).join('');
   document.getElementById('escFlow').innerHTML = flowHtml;
 
-  // Reasons
   const reasonHtml = Object.entries(reasons).map(([r, c]) => `
     <div class="esc-reason">
       <span class="esc-reason-name">${r}</span>
@@ -1018,96 +1224,139 @@ function renderEscalation(d) {
 }
 
 function renderTable(d) {
-  const rows = (d.recent_requests || []).slice(0, 20);
+  if (paused) return;
+
+  const rows = (d.recent_requests || []).slice(0, 50);
   if (!rows.length) {
     document.getElementById('requestsBody').innerHTML =
-      `<tr><td colspan="10" class="empty"><div class="empty-icon">⬡</div>no requests yet</td></tr>`;
+      `<tr><td colspan="9" class="empty"><div class="empty-icon">⬡</div>no requests yet</td></tr>`;
     return;
   }
   document.getElementById('tableMeta').textContent = `last ${rows.length}`;
 
   const html = rows.map(r => {
-    const tier = d.model_tiers?.[r.final_model] || 'fast';
-    const modelBadge = `badge-${tier === 'oracle' ? 'oracle' : tier === 'reasoning' ? 'reason' : 'fast'}`;
-    const statusBadge = r.ok ? 'badge-ok' : 'badge-error';
-    const escBadge = r.escalation_count > 0 ? `<span class="badge badge-escalated">${r.escalation_count}×</span>` : `<span style="color:var(--muted)">—</span>`;
-    const conf = ((r.confidence || 0) * 100).toFixed(0);
+    const rowKey = (r.ts || '') + (r.session_id || '') + (r.final_model || '');
+    const isNew  = !seenRowKeys.has(rowKey);
+    seenRowKeys.add(rowKey);
+
+    const tier           = tierOf(r.final_model, d.model_tiers?.[r.final_model]);
+    const modelBadgeClass = tier === 'fast' ? 'badge-fast' : tier === 'reasoning' ? 'badge-reason' : 'badge-oracle';
+    const statusClass    = r.ok ? 'badge-ok' : 'badge-error';
+    const conf           = ((r.confidence || 0) * 100).toFixed(0);
+    const shortName      = shortModel(r.final_model || '');
+    const fullName       = r.final_model || '—';
+
+    // Per-request cost
+    const totalTok = (r.prompt_tokens || 0) + (r.completion_tokens || 0);
+    const rate     = costRates[r.final_model] !== undefined ? costRates[r.final_model] : null;
+    const costHtml = rate === null
+      ? `<span style="color:var(--muted)">—</span>`
+      : rate === 0
+        ? `<span class="cost-free">free</span>`
+        : `<span class="cost-cell">${fmtDollars(totalTok / 1000 * rate)}</span>`;
+
+    // Models-tried chain (only shown when >1 model was tried)
+    const tried    = r.models_tried || [];
+    const triedHtml = tried.length > 1
+      ? tried.map((m, i) => {
+          const mTier  = tierOf(m, 'oracle');
+          const mClass = mTier === 'fast' ? 'badge-fast' : mTier === 'reasoning' ? 'badge-reason' : 'badge-oracle';
+          const mShort = shortModel(m);
+          const arrow  = i < tried.length - 1
+            ? `<span class="tried-arrow">→</span>`
+            : '';
+          return `<span class="badge ${mClass}" title="${m}" style="font-size:9px;padding:1px 5px">${mShort}</span>${arrow}`;
+        }).join('')
+      : `<span style="color:var(--muted);font-size:10px">—</span>`;
+
+    // Decision reason — truncated, full text on hover
+    const reason      = r.decision_reason || '';
+    const reasonSafe  = reason.replace(/"/g, "'");
+    const reasonShort = reason.length > 42 ? reason.slice(0, 42) + '…' : reason;
 
     return `
-      <tr>
+      <tr${isNew ? ' class="row-new"' : ''}>
         <td class="ts-cell">${fmtTs(r.ts)}</td>
-        <td><span style="color:${TASK_COLORS[r.task_type]||'#4A6080'}">${r.task_type}</span></td>
-        <td><span style="color:var(--muted)">${r.difficulty}</span></td>
-        <td><span class="badge ${modelBadge}">${r.final_model}</span></td>
+        <td><span style="color:${TASK_COLORS[r.task_type] || '#4A6080'}">${r.task_type || '—'}</span></td>
+        <td><span class="badge ${modelBadgeClass} model-badge" title="${fullName}">${shortName}</span></td>
+        <td><div class="tried-chain">${triedHtml}</div></td>
+        <td>${costHtml}</td>
         <td class="latency-cell">${fmtMs(r.latency_ms)}</td>
-        <td style="color:var(--muted)">${fmt((r.prompt_tokens||0)+(r.completion_tokens||0))}</td>
-        <td>${escBadge}</td>
-        <td><span class="badge ${statusBadge}">${r.ok ? 'OK' : r.error_type || 'ERR'}</span></td>
+        <td><span class="badge ${statusClass}">${r.ok ? 'OK' : r.error_type || 'ERR'}</span></td>
+        <td class="reason-cell" title="${reasonSafe}">${reasonShort}</td>
         <td>
           <div class="confidence-bar">
             <div class="conf-track"><div class="conf-fill" style="width:${conf}%"></div></div>
             <span style="font-size:10px;color:var(--muted)">${conf}%</span>
           </div>
         </td>
-        <td style="color:var(--muted);font-size:10px">${(r.router||'').replace('Router','')}</td>
       </tr>`;
   }).join('');
-  document.getElementById('requestsBody').innerHTML = html;
-}
 
-// ── FORMATTERS ────────────────────────────────────
-function fmt(n) { return (n||0).toLocaleString(); }
-function pct(n) { return ((n||0)*100).toFixed(1)+'%'; }
-function fmtMs(n) {
-  if (!n && n !== 0) return '—';
-  if (n < 1000) return Math.round(n) + 'ms';
-  return (n/1000).toFixed(1) + 's';
-}
-function fmtTs(ts) {
-  if (!ts) return '—';
-  try {
-    const d = new Date(ts);
-    return d.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  } catch { return ts; }
+  document.getElementById('requestsBody').innerHTML = html;
 }
 
 // ── MOCK DATA (shown when API unreachable) ─────────
 function mockData() {
-  const now = Date.now();
-  const reqs = Array.from({length:20}, (_,i) => ({
-    ts: new Date(now - i * 8000).toISOString(),
-    task_type: ['reason','extract','tool_call','code','summarize','search'][i%6],
-    difficulty: ['easy','medium','hard'][i%3],
-    final_model: ['qwen2.5:7b','qwen3:8b','deepseek-v4'][i%3],
-    latency_ms: 200 + Math.random()*2000,
-    prompt_tokens: 400 + Math.floor(Math.random()*800),
-    completion_tokens: 100 + Math.floor(Math.random()*400),
-    escalation_count: i%5===0 ? 1 : 0,
-    ok: i%7!==0,
-    error_type: i%7===0 ? 'timeout' : null,
-    confidence: 0.65 + Math.random()*0.35,
-    router: 'RuleBasedRouter',
-  }));
+  const now    = Date.now();
+  const models = [
+    'openai/gpt-oss-120b:free',
+    'arcee-ai/trinity-large-thinking',
+    'deepseek/deepseek-v4-flash',
+  ];
+  const reasons = [
+    'rule #6 (summarize + tokens < 3000) → fast tier',
+    'trouter: idx=1 (arcee-ai_trinity-large-thinking) → arcee-ai/trinity-large-thinking score=0.812 α=0.3',
+    'rule #3 (difficulty=hard) → oracle tier',
+    'trouter: idx=2 (deepseek-v4-flash) → deepseek/deepseek-v4-flash score=0.741 α=0.3',
+    'rule #8 (language=he) → reasoning tier',
+  ];
+  const reqs = Array.from({length: 20}, (_, i) => {
+    const model = models[i % 3];
+    const tried = i % 5 === 0 ? [models[0], model] : [model];
+    return {
+      ts:               new Date(now - i * 8000).toISOString(),
+      session_id:       'sess' + i,
+      task_type:        ['reason', 'extract', 'tool_call', 'code', 'summarize', 'search'][i % 6],
+      difficulty:       ['easy', 'medium', 'hard'][i % 3],
+      final_model:      model,
+      models_tried:     tried,
+      latency_ms:       200 + Math.random() * 2000,
+      prompt_tokens:    400 + Math.floor(Math.random() * 800),
+      completion_tokens: 100 + Math.floor(Math.random() * 400),
+      escalation_count: tried.length - 1,
+      ok:               i % 7 !== 0,
+      error_type:       i % 7 === 0 ? 'timeout' : null,
+      confidence:       0.65 + Math.random() * 0.35,
+      router:           ['RuleBasedRouter', 'TRouterRouter'][i % 2],
+      decision_reason:  reasons[i % reasons.length],
+    };
+  });
 
   return {
-    total_requests: 1842,
-    rpm: 3.7,
-    success_rate: 0.934,
-    success_count: 1720,
-    escalation_rate: 0.087,
-    escalation_count: 160,
-    error_rate: 0.066,
-    error_count: 122,
-    router: 'RuleBasedRouter',
+    total_requests:    1842,
+    rpm:               3.7,
+    success_rate:      0.934,
+    success_count:     1720,
+    escalation_rate:   0.087,
+    escalation_count:  160,
+    error_rate:        0.066,
+    error_count:       122,
+    router:            'RuleBasedRouter',
     model_tiers: {
-      'qwen2.5:7b': 'fast',
-      'qwen3:8b':   'reasoning',
-      'deepseek-v4':'oracle',
+      'openai/gpt-oss-120b:free':       'fast',
+      'arcee-ai/trinity-large-thinking': 'reasoning',
+      'deepseek/deepseek-v4-flash':      'oracle',
+    },
+    model_tokens: {
+      'openai/gpt-oss-120b:free':       {prompt: 580000, completion: 145000},
+      'arcee-ai/trinity-large-thinking': {prompt: 320000, completion: 98000},
+      'deepseek/deepseek-v4-flash':      {prompt: 182000, completion: 56000},
     },
     model_distribution: {
-      'qwen2.5:7b':  980,
-      'qwen3:8b':    654,
-      'deepseek-v4': 208,
+      'openai/gpt-oss-120b:free':       980,
+      'arcee-ai/trinity-large-thinking': 654,
+      'deepseek/deepseek-v4-flash':      208,
     },
     task_distribution: {
       'extract':   420,
@@ -1120,15 +1369,15 @@ function mockData() {
     latency_buckets: {
       lt100: 120, lt500: 680, lt1000: 540, lt3000: 380, lt10000: 100, gt10000: 22,
     },
-    latency_stats: { p50: 480, p90: 2100, p99: 7800, avg: 920 },
+    latency_stats: {p50: 480, p90: 2100, p99: 7800, avg: 920},
     escalation_flows: [
-      { model: 'qwen2.5:7b', count: 160 },
-      { model: 'qwen3:8b',   count: 98  },
-      { model: 'deepseek-v4',count: 42  },
+      {model: 'openai/gpt-oss-120b:free',        count: 160},
+      {model: 'arcee-ai/trinity-large-thinking',  count: 98 },
+      {model: 'deepseek/deepseek-v4-flash',       count: 42 },
     ],
     escalation_reasons: {
-      'rate_limit': 88,
-      'timeout':    48,
+      'rate_limit':   88,
+      'timeout':      48,
       'server_error': 24,
     },
     recent_requests: reqs,

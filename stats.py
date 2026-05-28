@@ -63,9 +63,9 @@ def _percentile(data: list[float], p: float) -> float:
 
 def _infer_tier(model_name: str) -> str:
     name = model_name.lower()
-    if "qwen2.5" in name or "2.5" in name:
+    if any(x in name for x in ("gpt-oss", "qwen2.5")):
         return "fast"
-    if "qwen3" in name or "glm" in name:
+    if any(x in name for x in ("trinity", "thinking", "arcee", "qwen3", "glm")):
         return "reasoning"
     return "oracle"
 
@@ -85,6 +85,7 @@ def _aggregate(records: list[dict], all_records: list[dict]) -> dict[str, Any]:
             "error_count":       0,
             "router":            "—",
             "model_tiers":       {},
+            "model_tokens":      {},
             "model_distribution":{},
             "task_distribution": {},
             "latency_buckets":   {},
@@ -118,13 +119,18 @@ def _aggregate(records: list[dict], all_records: list[dict]) -> dict[str, Any]:
             router = r["router"]
             break
 
-    model_dist:  dict[str, int] = {}
-    model_tiers: dict[str, str] = {}
+    model_dist:   dict[str, int]  = {}
+    model_tiers:  dict[str, str]  = {}
+    model_tokens: dict[str, dict] = {}
     for r in records:
         model = r.get("final_model") or r.get("decision_model", "unknown")
         model_dist[model] = model_dist.get(model, 0) + 1
         if model not in model_tiers:
             model_tiers[model] = _infer_tier(model)
+        if model not in model_tokens:
+            model_tokens[model] = {"prompt": 0, "completion": 0}
+        model_tokens[model]["prompt"]     += r.get("prompt_tokens", 0) or 0
+        model_tokens[model]["completion"] += r.get("completion_tokens", 0) or 0
 
     task_dist: dict[str, int] = {}
     for r in records:
@@ -168,7 +174,7 @@ def _aggregate(records: list[dict], all_records: list[dict]) -> dict[str, Any]:
         key=lambda x: tier_order.get(model_tiers.get(x["model"], "oracle"), 99),
     )
 
-    recent = list(reversed(records[-20:]))
+    recent = list(reversed(records[-50:]))
 
     return {
         "total_requests":    total,
@@ -181,6 +187,7 @@ def _aggregate(records: list[dict], all_records: list[dict]) -> dict[str, Any]:
         "error_count":       error_count,
         "router":            router,
         "model_tiers":       model_tiers,
+        "model_tokens":      model_tokens,
         "model_distribution": model_dist,
         "task_distribution": task_dist,
         "latency_buckets":   buckets,
