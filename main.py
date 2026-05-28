@@ -1,11 +1,13 @@
 import hashlib
+import json
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Generator
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from optmod.config import load_config, Config
@@ -69,6 +71,49 @@ def _derive_session_id(req: OpenAIChatRequest) -> str:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _completion_to_sse(resp: dict) -> Generator[str, None, None]:
+    """Wrap a non-streaming chat.completion response in SSE so streaming clients work."""
+    msg_id  = resp.get("id", "")
+    created = resp.get("created", 0)
+    model   = resp.get("model", "")
+    usage   = resp.get("usage", {})
+
+    choices = resp.get("choices", [])
+    if choices:
+        choice       = choices[0]
+        message      = choice.get("message", {})
+        finish_reason = choice.get("finish_reason", "stop")
+        tool_calls   = message.get("tool_calls")
+
+        delta: dict = {"role": message.get("role", "assistant")}
+        if tool_calls:
+            delta["content"]    = None
+            delta["tool_calls"] = [
+                {"index": i, **{k: v for k, v in tc.items() if k != "index"}}
+                for i, tc in enumerate(tool_calls)
+            ]
+        else:
+            delta["content"] = message.get("content") or ""
+
+        # Propagate non-standard fields (reasoning, etc.) so clients see them
+        for key in ("reasoning", "reasoning_details"):
+            if key in message:
+                delta[key] = message[key]
+
+        chunk = {"id": msg_id, "object": "chat.completion.chunk",
+                 "created": created, "model": model,
+                 "choices": [{"index": 0, "delta": delta, "finish_reason": None}]}
+        yield f"data: {json.dumps(chunk)}\n\n"
+
+        final = {"id": msg_id, "object": "chat.completion.chunk",
+                 "created": created, "model": model,
+                 "choices": [{"index": 0, "delta": {}, "finish_reason": finish_reason}],
+                 "usage": usage}
+        yield f"data: {json.dumps(final)}\n\n"
+
+    yield "data: [DONE]\n\n"
 
 
 @app.post("/v1/chat/completions")
@@ -137,6 +182,12 @@ async def chat_completions(raw: Request) -> JSONResponse:
         return JSONResponse(
             status_code=502,
             content={"error": {"message": f"optmod: all models failed ({error_type})", "type": "proxy_error"}},
+        )
+    if req.stream:
+        return StreamingResponse(
+            _completion_to_sse(response),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
     return JSONResponse(content=response)
 
