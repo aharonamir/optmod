@@ -109,7 +109,9 @@ class TRouterRouter(BaseRouter):
 
     def _route(self, ctx: RoutingContext) -> RoutingDecision:
         text = ctx.features.last_user_message or ""
-
+        logging.info(f"[trouter] encoding text ({len(text)} chars): {text[:120]!r}")
+        logging.info(f"[trouter] ctx.features fields: {vars(ctx.features)}")
+        
         emb = self._encoder.encode(text, convert_to_tensor=True).cpu()  # [384]
 
         chosen_idx, scores_adj, _ = self._route_fn(

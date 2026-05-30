@@ -20,13 +20,25 @@ _DIFF: dict[str, re.Pattern] = {
 _HE: re.Pattern = re.compile(r"[א-ת]")
 
 
+def _message_text(content: str | list | None) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return " ".join(
+            part.get("text", "") if isinstance(part, dict) else str(part)
+            for part in content
+            if not isinstance(part, dict) or part.get("type") == "text"
+        )
+    return ""
+
+
 class FeatureExtractor:
     def extract(self, req: OpenAIChatRequest) -> Features:
         last_user: str = next(
             (
-                m.content
+                _message_text(m.content)
                 for m in reversed(req.messages)
-                if m.role == "user" and isinstance(m.content, str)
+                if m.role == "user" and m.content is not None
             ),
             "",
         )
