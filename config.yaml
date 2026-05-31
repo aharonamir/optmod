@@ -1,5 +1,8 @@
-# Active router: passthrough | rule_based | decision_tree
-router: trouter
+# Active router: passthrough | rule_based | decision_tree | trouter | perf_router
+router: perf_router
+
+perf_router_cost_weight: 0.3
+perf_router_baseline: deepseek/deepseek-v4-pro
 
 # Oracle model — quality ceiling, used as primary
 primary_model: deepseek-v4-pro
@@ -52,3 +55,94 @@ models:
     thinking_mode: true
     thinking_default: false
     timeout_s: 180.0
+
+  - name: nvidia/nemotron-3-super-120b-a12b:free
+    provider: openrouter
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    tier: 0
+    tier_name: fast
+    context_window: 1000000
+    cost_per_1k: 0.0
+    supports_tools: true
+    thinking_mode: true
+    thinking_default: false
+    timeout_s: 90.0
+
+  - name: google/gemini-3.1-flash-lite
+    provider: openrouter
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    tier: 1
+    tier_name: reasoning
+    context_window: 1000000
+    cost_per_1k: 0.0001
+    supports_tools: true
+    thinking_mode: false
+    thinking_default: false
+    timeout_s: 90.0
+
+  - name: tencent/hy3-preview
+    provider: openrouter
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    tier: 1
+    tier_name: reasoning
+    context_window: 256000
+    cost_per_1k: 0.000063
+    supports_tools: true
+    thinking_mode: true
+    thinking_default: false
+    timeout_s: 120.0
+
+  - name: anthropic/claude-sonnet-4.6
+    provider: openrouter
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    tier: 2
+    tier_name: oracle
+    context_window: 200000
+    cost_per_1k: 0.003
+    supports_tools: true
+    thinking_mode: true
+    thinking_default: false
+    timeout_s: 180.0
+
+  - name: xiaomi/mimo-v2.5-pro
+    provider: openrouter
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    tier: 2
+    tier_name: oracle
+    context_window: 128000
+    cost_per_1k: 0.000435
+    supports_tools: true
+    thinking_mode: false
+    thinking_default: false
+    timeout_s: 120.0
+
+  - name: moonshotai/kimi-k2.6
+    provider: openrouter
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    tier: 2
+    tier_name: oracle
+    context_window: 128000
+    cost_per_1k: 0.000684
+    supports_tools: true
+    thinking_mode: false
+    thinking_default: false
+    timeout_s: 120.0
+
+  - name: openai/gpt-4o-mini
+    provider: openrouter
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    tier: 0
+    tier_name: fast
+    context_window: 128000
+    cost_per_1k: 0.00015
+    supports_tools: true
+    thinking_mode: false
+    thinking_default: false
+    timeout_s: 60.0

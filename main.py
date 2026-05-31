@@ -223,7 +223,7 @@ async def restart_server() -> JSONResponse:
 @app.post("/optmod/router/{name}")
 async def set_router(name: str) -> JSONResponse:
     global _router
-    valid = {"passthrough", "rule_based", "decision_tree", "trouter"}
+    valid = {"passthrough", "rule_based", "decision_tree", "trouter", "perf_router"}
     if name not in valid:
         return JSONResponse(status_code=400, content={"error": f"unknown router: {name}"})
     _router = build_router(name, _config.dict())
