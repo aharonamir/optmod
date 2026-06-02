@@ -1,3 +1,5 @@
+import logging
+
 import httpx
 
 from optmod.registry import ModelConfig
@@ -28,7 +30,7 @@ class ModelForwarder:
             "model":    model.name,
             "messages": [m.model_dump(exclude_none=True) for m in messages],
             **req.model_dump(
-                exclude={"model", "messages", "stream"},
+                exclude={"model", "messages", "stream", "stream_options"},
                 exclude_none=True,
             ),
             "stream": False,
@@ -42,7 +44,11 @@ class ModelForwarder:
             )
             if r.status_code == 200:
                 return r.json(), None
-            return {}, self._classify(r.status_code)
+            error_type = self._classify(r.status_code)
+            logging.warning(
+                f"[optmod] {model.name} HTTP {r.status_code} ({error_type}): {r.text[:400]}"
+            )
+            return {}, error_type
 
         except httpx.TimeoutException:
             return {}, "timeout"
