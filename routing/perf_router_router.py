@@ -69,6 +69,12 @@ class PerfRouterRouter(BaseRouter):
         baseline_env = os.environ.get("PERF_ROUTER_BASELINE")
         self._baseline = baseline_cfg or baseline_env or _DEFAULT_BASELINE
 
+        threshold_cfg = config.get("perf_router_degradation_threshold")
+        threshold_env = os.environ.get("PERF_ROUTER_DEGRADATION_THRESHOLD")
+        self._degradation_threshold = float(
+            threshold_cfg if threshold_cfg is not None else (threshold_env or 0.0)
+        )
+
         try:
             from optmod.routing.perf_router_inference import PerfRouterInference
 
@@ -113,8 +119,9 @@ class PerfRouterRouter(BaseRouter):
 
         decision = self._perf_router.route(
             text,
-            token_count = token_count,
-            has_images  = has_images,
+            token_count           = token_count,
+            has_images            = has_images,
+            degradation_threshold = self._degradation_threshold,
         )
 
         chosen_id = decision["decision_model"]
@@ -131,7 +138,10 @@ class PerfRouterRouter(BaseRouter):
             mutator     = mutator,
             reason      = (
                 f"perf_router: {task_type} → {chosen_id} "
-                f"cost_saved={cost_saved_pct:+.1f}% α={alpha}"
+                f"quality={quality:.3f} "
+                f"cost_saved={cost_saved_pct:+.1f}% "
+                f"α={alpha:.2f} "
+                f"degradation={self._degradation_threshold:.2f}"
             ),
             confidence  = float(quality),
             router_name = self.name,

@@ -3,6 +3,7 @@ router: perf_router
 
 perf_router_cost_weight: 0.3
 perf_router_baseline: deepseek/deepseek-v4-pro
+perf_router_degradation_threshold: 0.15
 
 # Oracle model — quality ceiling, used as primary
 primary_model: deepseek-v4-pro

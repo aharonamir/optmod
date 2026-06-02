@@ -404,22 +404,39 @@ class PerfRouterInference:
 
     def route(self, query: str, token_count: int | None = None,
              has_images: bool = False,
-             cost_cap_multiplier: float = 2.0) -> dict:
+             cost_cap_multiplier: float = 2.0,
+             degradation_threshold: float = 0.0) -> dict:
         """
         Route a query to the best model.
 
         Parameters
         ----------
-        query               : the incoming user message text
-        token_count         : total tokens in the request (prompt + history).
-                              Models whose effective_context_k * 1000 <
-                              token_count are excluded.
-        has_images          : if True, only vision-capable models are eligible.
-        cost_cap_multiplier : models costing more than
-                              baseline_cost × cost_cap_multiplier are excluded
-                              unless no cheaper model can handle the task.
-                              Default 2.0 = max 2× the baseline cost.
-                              Set to float('inf') to disable the cap.
+        query                 : the incoming user message text
+        token_count           : total tokens in the request (prompt + history).
+                                Models whose effective_context_k * 1000 <
+                                token_count are excluded.
+        has_images            : if True, only vision-capable models are eligible.
+        cost_cap_multiplier   : models costing more than
+                                baseline_cost × cost_cap_multiplier are excluded.
+                                Default 2.0 = max 2× the baseline cost.
+                                Set to float('inf') to disable the cap.
+        degradation_threshold : accept quality degradation up to this fraction
+                                below the best predicted quality, then pick the
+                                cheapest model within that band.
+
+                                Example: degradation_threshold=0.10 means
+                                "I accept any model within 10% of the top
+                                predicted quality — pick the cheapest one."
+
+                                0.0 (default) = always pick the highest
+                                quality model (original behaviour).
+                                0.10 = accept up to 10% quality drop for cost.
+                                0.20 = accept up to 20% quality drop for cost.
+
+                                This dramatically increases routing diversity —
+                                instead of always picking the single highest
+                                scorer, any model in the quality band is
+                                eligible and the cheapest wins.
 
         Returns a decision dict with all relevant metadata for logging.
         """
@@ -487,9 +504,30 @@ class PerfRouterInference:
         adjusted = quality_arr - self.cost_weight * self._costs_norm
 
         # ── Step 4: Choose best model (among eligible models only) ───────────
-        # Mask out ineligible models before argmax
-        adjusted_masked = np.where(eligible_mask, adjusted, -np.inf)
-        chosen_idx   = int(np.argmax(adjusted_masked))
+        if degradation_threshold > 0.0:
+            # Degradation threshold mode:
+            # Find the best predicted quality among eligible models.
+            # Accept any model within degradation_threshold of that quality.
+            # Among the acceptable models, pick the cheapest one.
+            eligible_quality = np.where(eligible_mask, quality_arr, -np.inf)
+            best_quality     = float(eligible_quality.max())
+            quality_floor    = best_quality * (1.0 - degradation_threshold)
+
+            # Models in the quality band: quality >= floor AND eligible
+            in_band = eligible_mask & (quality_arr >= quality_floor)
+
+            if in_band.sum() == 0:
+                # Fallback — use best eligible model
+                in_band = eligible_mask
+
+            # Among in-band models, pick the cheapest
+            # (set ineligible costs to inf so they can't win)
+            costs_for_selection = np.where(in_band, self._costs_raw, np.inf)
+            chosen_idx = int(np.argmin(costs_for_selection))
+        else:
+            # Standard mode: maximise adjusted utility (quality - α×cost)
+            adjusted_masked = np.where(eligible_mask, adjusted, -np.inf)
+            chosen_idx      = int(np.argmax(adjusted_masked))
         chosen_id    = self._model_ids[chosen_idx]
         chosen_qual  = float(quality_arr[chosen_idx])
         chosen_cost  = float(self._costs_raw[chosen_idx])
@@ -536,13 +574,14 @@ class PerfRouterInference:
             "cost_saved_pct":       cost_saved_pct,
 
             # Config
-            "alpha":                self.cost_weight,
-            "inference_ms":         inference_ms,
-            "token_count":          token_count,
-            "has_images":           has_images,
-            "eligible_models":      int(eligible_mask.sum()),
-            "context_filtered":     int((~eligible_mask).sum()),
-            "cost_cap_multiplier":  cost_cap_multiplier,
+            "alpha":                    self.cost_weight,
+            "inference_ms":             inference_ms,
+            "token_count":              token_count,
+            "has_images":               has_images,
+            "eligible_models":          int(eligible_mask.sum()),
+            "context_filtered":         int((~eligible_mask).sum()),
+            "cost_cap_multiplier":      cost_cap_multiplier,
+            "degradation_threshold":    degradation_threshold,
 
             # All model utilities (for debugging)
             "all_utilities": {
@@ -573,6 +612,10 @@ def main():
                         help=f"Baseline model ID for cost comparison "
                              f"(default: {BASELINE_MODEL_ID}, "
                              "or PERF_ROUTER_BASELINE env var)")
+    parser.add_argument("--degradation-threshold", type=float, default=0.0,
+                        help="Accept quality within this fraction of best "
+                             "then pick cheapest (e.g. 0.10 = 10%% degradation ok). "
+                             "Default 0.0 = always pick highest quality.")
     parser.add_argument("--interactive", action="store_true",
                         help="Interactive mode — enter queries one by one")
     args = parser.parse_args()
@@ -633,7 +676,10 @@ def main():
                 query = input("Query> ").strip()
                 if not query:
                     continue
-                decision = router.route(query)
+                decision = router.route(
+                query,
+                degradation_threshold=args.degradation_threshold
+            )
                 print_decision(query, decision)
             except KeyboardInterrupt:
                 print("\nBye.")

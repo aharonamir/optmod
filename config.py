@@ -20,9 +20,11 @@ class Config:
     log_path:      str
     escalation:    EscalationConfig
     models:        list[ModelConfig]
+    _raw:          dict = field(default_factory=dict)
 
     def dict(self) -> dict:
         return {
+            **self._raw,
             "router":        self.router,
             "primary_model": self.primary_model,
             "policy_path":   self.policy_path,
@@ -63,4 +65,5 @@ def load_config(path: str = "config.yaml") -> Config:
         log_path=      raw.get("log_path", "routing.log.jsonl"),
         escalation=    esc,
         models=        models,
+        _raw=          raw,
     )
