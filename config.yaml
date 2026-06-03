@@ -2,11 +2,12 @@
 router: perf_router
 
 perf_router_cost_weight: 0.3
-perf_router_baseline: deepseek/deepseek-v4-pro
+perf_router_baseline: deepseek/deepseek-v4-flash
 perf_router_degradation_threshold: 0.15
+perf_router_min_similarity: 0.20
 
 # Oracle model — quality ceiling, used as primary
-primary_model: deepseek-v4-pro
+primary_model: deepseek-v4-flash
 
 # Path to WildClawBench-trained decision tree (created in Phase 2)
 policy_path: routing_policy.pkl
