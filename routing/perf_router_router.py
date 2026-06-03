@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import json as _json
 from pathlib import Path
 
 from optmod.routing import BaseRouter
@@ -56,6 +57,23 @@ def _resolve_model(idx: int, model_ids: list[str], registry):
     return registry.primary
 
 
+def _extract_content(raw: str) -> str:
+    """
+    Extract actual user text from optmod's JSON-wrapped session message format.
+
+    Messages arrive as:
+      '{"source": "sess", ..., "content": "hi", "type": "user input"}'
+
+    Falls back to raw string if not JSON or no content field.
+    """
+    if raw.strip().startswith("{"):
+        try:
+            return _json.loads(raw).get("content", raw)
+        except (_json.JSONDecodeError, AttributeError):
+            pass
+    return raw
+
+
 class PerfRouterRouter(BaseRouter):
     def __init__(self, config: dict) -> None:
         super().__init__(config)
@@ -75,21 +93,30 @@ class PerfRouterRouter(BaseRouter):
             threshold_cfg if threshold_cfg is not None else (threshold_env or 0.0)
         )
 
+        min_sim_cfg = config.get("perf_router_min_similarity")
+        min_sim_env = os.environ.get("PERF_ROUTER_MIN_SIMILARITY")
+        self._min_similarity = float(
+            min_sim_cfg if min_sim_cfg is not None else (min_sim_env or 0.20)
+        )
+
         try:
             from optmod.routing.perf_router_inference import PerfRouterInference
 
             self._perf_router = PerfRouterInference(
-                router_path   = _DIR / "perf_router.pkl",
-                taxonomy_path = _DIR / "task_taxonomy.json",
-                registry_path = _DIR / "model_registry.json",
-                features_path = _DIR / "model_features.csv",
-                cost_weight   = self._cost_weight,
-                baseline_model = self._baseline,
+                router_path              = _DIR / "perf_router.pkl",
+                taxonomy_path            = _DIR / "task_taxonomy.json",
+                registry_path            = _DIR / "model_registry.json",
+                features_path            = _DIR / "model_features.csv",
+                cost_weight              = self._cost_weight,
+                baseline_model           = self._baseline,
+                min_similarity_threshold = self._min_similarity,
             )
             self._ready = True
             logging.info(
                 f"[optmod] PerfRouterRouter loaded "
-                f"(α={self._cost_weight}, baseline={self._baseline})"
+                f"(α={self._cost_weight}, baseline={self._baseline}, "
+                f"degradation={self._degradation_threshold}, "
+                f"min_sim={self._min_similarity})"
             )
         except Exception as exc:
             logging.warning(f"[optmod] PerfRouterRouter failed to load: {exc}")
@@ -104,9 +131,9 @@ class PerfRouterRouter(BaseRouter):
             return self._passthrough(ctx, f"perf_router error: {exc}")
 
     def _route(self, ctx: RoutingContext) -> RoutingDecision:
-        text        = ctx.features.last_user_message or ""
         token_count = ctx.features.token_count or None
 
+        # ── Detect image attachments ──────────────────────────────────────────
         has_images = False
         for msg in ctx.request.messages:
             if isinstance(msg.content, list):
@@ -117,21 +144,60 @@ class PerfRouterRouter(BaseRouter):
             if has_images:
                 break
 
+        # ── Build routing text from last 3 user messages ──────────────────────
+        # Always use the last 3 user messages rather than just the last message.
+        # This correctly handles follow-ups like "yes", "fix it", "do that"
+        # which are meaningless without context from prior turns.
+        #
+        # Only user messages are included — system prompts describe model
+        # behaviour (not the task), assistant messages are prior responses,
+        # and tool messages are structured JSON blobs. All three add noise
+        # to the sentence-BERT classification.
+        #
+        # The last message is repeated at the end to bias the embedding
+        # toward the current intent without losing surrounding context.
+        user_messages = []
+        for msg in ctx.request.messages:
+            if msg.role != "user":
+                continue
+            if isinstance(msg.content, str) and msg.content.strip():
+                content = _extract_content(msg.content.strip())
+            elif isinstance(msg.content, list):
+                content = " ".join(
+                    _extract_content(p.get("text", ""))
+                    for p in msg.content
+                    if isinstance(p, dict) and p.get("type") == "text"
+                ).strip()
+            else:
+                content = ""
+            if content:
+                user_messages.append(content)
+
+        last_3 = user_messages[-3:]
+
+        # Repeat last message to weight current intent in the embedding
+        if last_3:
+            last_3 = last_3 + [last_3[-1]]
+
+        routing_text = "\n".join(last_3) if last_3 else ""
+
+        # ── Route ─────────────────────────────────────────────────────────────
         decision = self._perf_router.route(
-            text,
+            routing_text,
             token_count           = token_count,
             has_images            = has_images,
             degradation_threshold = self._degradation_threshold,
         )
 
-        chosen_id = decision["decision_model"]
-        model     = _resolve_model(0, [chosen_id], ctx.registry)
-        mutator   = "thinking_mode" if model.thinking_mode else "noop"
+        chosen_id    = decision["decision_model"]
+        model        = _resolve_model(0, [chosen_id], ctx.registry)
+        mutator      = "thinking_mode" if model.thinking_mode else "noop"
 
         task_type      = decision.get("task_type", "unknown")
         cost_saved_pct = decision.get("cost_saved_pct", 0.0)
         alpha          = decision.get("alpha", self._cost_weight)
         quality        = decision.get("predicted_quality", 0.5)
+        routing_mode   = decision.get("routing_mode", "normal")
 
         return RoutingDecision(
             model       = model,
@@ -141,7 +207,8 @@ class PerfRouterRouter(BaseRouter):
                 f"quality={quality:.3f} "
                 f"cost_saved={cost_saved_pct:+.1f}% "
                 f"α={alpha:.2f} "
-                f"degradation={self._degradation_threshold:.2f}"
+                f"degradation={self._degradation_threshold:.2f} "
+                f"mode={routing_mode}"
             ),
             confidence  = float(quality),
             router_name = self.name,
