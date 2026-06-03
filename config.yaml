@@ -6,6 +6,8 @@ perf_router_baseline: deepseek/deepseek-v4-flash
 perf_router_degradation_threshold: 0.15
 perf_router_min_similarity: 0.20
 
+tool_result_compressor: false
+
 # Oracle model — quality ceiling, used as primary
 primary_model: deepseek-v4-flash
 

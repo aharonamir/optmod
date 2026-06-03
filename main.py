@@ -17,34 +17,38 @@ from optmod.routing import BaseRouter, build_router
 from optmod.mutators import BaseContextMutator
 from optmod.mutators.noop import NoopMutator
 from optmod.mutators.thinking_mode import ThinkingModeMutator
+from optmod.mutators.tool_result_compressor import ToolResultCompressorMutator
 from optmod.escalation import EscalationPolicy
 from optmod.forwarder import ModelForwarder
 from optmod.log import RoutingLog
 from optmod.schemas import OpenAIChatRequest, RoutingContext, RoutingDecision, LogEntry
 from optmod.stats import stats_router
 
-_registry:   ModelRegistry       | None = None
-_extractor:  FeatureExtractor    | None = None
-_router:     BaseRouter          | None = None
-_mutators:   dict[str, BaseContextMutator] = {}
-_escalation: EscalationPolicy    | None = None
-_forwarder:  ModelForwarder      | None = None
-_log:        RoutingLog          | None = None
-_config:     Config              | None = None
+_registry:             ModelRegistry       | None = None
+_extractor:            FeatureExtractor    | None = None
+_router:               BaseRouter          | None = None
+_mutators:             dict[str, BaseContextMutator] = {}
+_escalation:           EscalationPolicy    | None = None
+_forwarder:            ModelForwarder      | None = None
+_log:                  RoutingLog          | None = None
+_config:               Config              | None = None
+_tool_compressor_on:   bool               = False
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _registry, _extractor, _router, _mutators
-    global _escalation, _forwarder, _log, _config
+    global _escalation, _forwarder, _log, _config, _tool_compressor_on
 
     _config     = load_config("config.yaml")
+    _tool_compressor_on = bool(_config.dict().get("tool_result_compressor", False))
     _registry   = ModelRegistry(_config.models, _config.primary_model)
     _extractor  = FeatureExtractor()
     _router     = build_router(_config.router, _config.dict())
     _mutators   = {
-        "noop":          NoopMutator(),
-        "thinking_mode": ThinkingModeMutator(),
+        "noop":                   NoopMutator(),
+        "thinking_mode":          ThinkingModeMutator(),
+        "tool_result_compressor": ToolResultCompressorMutator(),
     }
     _escalation = EscalationPolicy(max_escalations=_config.escalation.max_escalations)
     _forwarder  = ModelForwarder()
@@ -141,6 +145,8 @@ async def chat_completions(raw: Request) -> JSONResponse:
         decision = _router.route(ctx)
         mutator  = _mutators.get(decision.mutator, _mutators["noop"])
         msgs     = mutator.mutate(req.messages, decision)
+        if _tool_compressor_on:
+            msgs = _mutators["tool_result_compressor"].mutate(msgs, decision)
 
         response, error_type = await _forwarder.forward(decision.model, req, msgs)
         ctx.models_tried.append(decision.model.name)
@@ -195,8 +201,9 @@ async def chat_completions(raw: Request) -> JSONResponse:
 @app.get("/optmod/status")
 async def status() -> JSONResponse:
     return JSONResponse(content={
-        "router":  _router.name,
-        "primary": _registry.primary.name,
+        "router":           _router.name,
+        "primary":          _registry.primary.name,
+        "tool_compressor":  _tool_compressor_on,
         "models": [
             {"name": m.name, "tier": m.tier_name, "cost_per_1k": m.cost_per_1k}
             for m in _registry.all()
@@ -218,6 +225,15 @@ async def restart_server() -> JSONResponse:
     reload_tier_map()
     Path("main.py").touch()
     return JSONResponse(content={"ok": True, "message": "reloading…"})
+
+
+@app.post("/optmod/compressor/{state}")
+async def set_compressor(state: str) -> JSONResponse:
+    global _tool_compressor_on
+    if state not in ("on", "off"):
+        return JSONResponse(status_code=400, content={"error": f"unknown state: {state}"})
+    _tool_compressor_on = state == "on"
+    return JSONResponse(content={"tool_compressor": _tool_compressor_on, "ok": True})
 
 
 @app.post("/optmod/router/{name}")
