@@ -113,6 +113,9 @@ def _aggregate(records: list[dict], all_records: list[dict]) -> dict[str, Any]:
             "escalation_flows":  [],
             "escalation_reasons":{},
             "recent_requests":   [],
+            "cache_hit_rate":    0.0,
+            "cached_tokens":     0,
+            "prompt_tokens":     0,
         }
 
     success_count    = sum(1 for r in records if r.get("ok", True))
@@ -142,15 +145,22 @@ def _aggregate(records: list[dict], all_records: list[dict]) -> dict[str, Any]:
     model_dist:   dict[str, int]  = {}
     model_tiers:  dict[str, str]  = {}
     model_tokens: dict[str, dict] = {}
+    total_prompt_tokens = 0
+    total_cached_tokens = 0
     for r in records:
         model = r.get("final_model") or r.get("decision_model", "unknown")
         model_dist[model] = model_dist.get(model, 0) + 1
         if model not in model_tiers:
             model_tiers[model] = _infer_tier(model)
         if model not in model_tokens:
-            model_tokens[model] = {"prompt": 0, "completion": 0}
-        model_tokens[model]["prompt"]     += r.get("prompt_tokens", 0) or 0
+            model_tokens[model] = {"prompt": 0, "completion": 0, "cached": 0}
+        pt = r.get("prompt_tokens", 0) or 0
+        ct = r.get("cached_tokens", 0) or 0
+        model_tokens[model]["prompt"]     += pt
         model_tokens[model]["completion"] += r.get("completion_tokens", 0) or 0
+        model_tokens[model]["cached"]     += ct
+        total_prompt_tokens += pt
+        total_cached_tokens += ct
 
     task_dist: dict[str, int] = {}
     for r in records:
@@ -215,6 +225,9 @@ def _aggregate(records: list[dict], all_records: list[dict]) -> dict[str, Any]:
         "escalation_flows":  esc_flow,
         "escalation_reasons": esc_reasons,
         "recent_requests":   recent,
+        "cache_hit_rate":    round(total_cached_tokens / total_prompt_tokens, 4) if total_prompt_tokens else 0.0,
+        "cached_tokens":     total_cached_tokens,
+        "prompt_tokens":     total_prompt_tokens,
     }
 
 

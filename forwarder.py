@@ -43,7 +43,16 @@ class ModelForwarder:
                 timeout=model.timeout_s,
             )
             if r.status_code == 200:
-                return r.json(), None
+                body  = r.json()
+                usage = body.get("usage") or {}
+                cached = (
+                    (usage.get("prompt_tokens_details") or {}).get("cached_tokens")
+                    or usage.get("prompt_cache_hit_tokens")
+                    or usage.get("cache_read_input_tokens")
+                    or 0
+                )
+                body.setdefault("usage", {})["_optmod_cached_tokens"] = int(cached)
+                return body, None
             error_type = self._classify(r.status_code)
             logging.warning(
                 f"[optmod] {model.name} HTTP {r.status_code} ({error_type}): {r.text[:400]}"

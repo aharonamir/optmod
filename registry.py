@@ -15,6 +15,7 @@ class ModelConfig:
     thinking_mode:    bool
     thinking_default: bool
     timeout_s:        float = 120.0
+    supports_vision:  bool  = False
 
 
 class ModelRegistry:

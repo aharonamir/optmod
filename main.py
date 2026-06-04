@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from optmod.config import load_config, Config
-from optmod.registry import ModelRegistry
+from optmod.registry import ModelRegistry, ModelConfig
 from optmod.features import FeatureExtractor
 from optmod.routing import BaseRouter, build_router
 from optmod.mutators import BaseContextMutator
@@ -21,7 +21,7 @@ from optmod.mutators.tool_result_compressor import ToolResultCompressorMutator
 from optmod.escalation import EscalationPolicy
 from optmod.forwarder import ModelForwarder
 from optmod.log import RoutingLog
-from optmod.schemas import OpenAIChatRequest, RoutingContext, RoutingDecision, LogEntry
+from optmod.schemas import OpenAIChatRequest, RoutingContext, RoutingDecision, LogEntry, SessionPin
 from optmod.stats import stats_router
 
 _registry:             ModelRegistry       | None = None
@@ -33,15 +33,22 @@ _forwarder:            ModelForwarder      | None = None
 _log:                  RoutingLog          | None = None
 _config:               Config              | None = None
 _tool_compressor_on:   bool               = False
+_session_pins:         dict[str, SessionPin] = {}
+_hard_window_s:        float              = 300.0
+_soft_window_s:        float              = 1800.0
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _registry, _extractor, _router, _mutators
     global _escalation, _forwarder, _log, _config, _tool_compressor_on
+    global _hard_window_s, _soft_window_s
 
     _config     = load_config("config.yaml")
     _tool_compressor_on = bool(_config.dict().get("tool_result_compressor", False))
+    _hard_window_s = float(_config.dict().get("session_pin_hard_window_s", 300.0))
+    _soft_window_s = float(_config.dict().get("session_pin_soft_window_s", 1800.0))
+    _session_pins.clear()
     _registry   = ModelRegistry(_config.models, _config.primary_model)
     _extractor  = FeatureExtractor()
     _router     = build_router(_config.router, _config.dict())
@@ -120,6 +127,87 @@ def _completion_to_sse(resp: dict) -> Generator[str, None, None]:
     yield "data: [DONE]\n\n"
 
 
+def _request_has_images(req: OpenAIChatRequest) -> bool:
+    for m in req.messages:
+        if isinstance(m.content, list):
+            for part in m.content:
+                if isinstance(part, dict) and part.get("type") in ("image_url", "image"):
+                    return True
+    return False
+
+
+def _get_active_pin(session_id: str, now: float) -> SessionPin | None:
+    pin = _session_pins.get(session_id)
+    if pin is None:
+        return None
+    if now - pin.last_turn_at > _soft_window_s:
+        _session_pins.pop(session_id, None)
+        return None
+    return pin
+
+
+def _update_pin(session_id: str, model_name: str, cached_tokens: int, prompt_tokens: int, now: float) -> None:
+    existing   = _session_pins.get(session_id)
+    turn_count = (existing.turn_count + 1) if existing else 1
+    cache_rate = (cached_tokens / prompt_tokens) if prompt_tokens > 0 else 0.0
+    _session_pins[session_id] = SessionPin(
+        model_name=         model_name,
+        last_turn_at=       now,
+        last_cache_rate=    cache_rate,
+        last_prompt_tokens= prompt_tokens,
+        turn_count=         turn_count,
+    )
+
+
+def _rehome_pin(pin_model: ModelConfig, ctx: RoutingContext) -> ModelConfig | None:
+    """Pick a larger-context replacement closest to pin_model in tier and cost."""
+    needed = ctx.features.token_count
+    candidates = [
+        m for m in ctx.registry.all()
+        if m.name != pin_model.name
+        and m.context_window >= needed
+        and (m.supports_tools or not pin_model.supports_tools)
+        and (m.supports_vision or not pin_model.supports_vision)
+    ]
+    if not candidates:
+        return None
+    same_tier = [m for m in candidates if m.tier == pin_model.tier]
+    pool      = same_tier or candidates
+    return min(pool, key=lambda m: abs(m.cost_per_1k - pin_model.cost_per_1k))
+
+
+def _try_hard_pin(
+    pin:  SessionPin,
+    ctx:  RoutingContext,
+    now:  float,
+) -> tuple[RoutingDecision | None, str]:
+    """Return (decision, pin_state). decision=None means evict and fall through to router."""
+    if pin.model_name not in {m.name for m in ctx.registry.all()}:
+        return None, "evicted_missing_model"
+    pin_model = ctx.registry.get(pin.model_name)
+    if _request_has_images(ctx.request) and not pin_model.supports_vision:
+        return None, "evicted_vision"
+    if ctx.features.token_count > pin_model.context_window:
+        replacement = _rehome_pin(pin_model, ctx)
+        if replacement is None:
+            return None, "evicted_context"
+        pin.model_name = replacement.name
+        return RoutingDecision(
+            model=       replacement,
+            mutator=     "noop",
+            reason=      f"session_pin_rehomed from={pin_model.name} to={replacement.name}",
+            confidence=  1.0,
+            router_name= "session_pin",
+        ), "rehomed_context"
+    return RoutingDecision(
+        model=       pin_model,
+        mutator=     "noop",
+        reason=      f"session_pin_hard age_s={int(now - pin.last_turn_at)} turn={pin.turn_count}",
+        confidence=  1.0,
+        router_name= "session_pin",
+    ), "hard"
+
+
 @app.post("/v1/chat/completions")
 async def chat_completions(raw: Request) -> JSONResponse:
     body     = await raw.json()
@@ -127,6 +215,7 @@ async def chat_completions(raw: Request) -> JSONResponse:
     features = _extractor.extract(req)
     session  = _derive_session_id(req)
     t0       = time.perf_counter()
+    now      = time.time()
 
     ctx = RoutingContext(
         request=req,
@@ -135,6 +224,22 @@ async def chat_completions(raw: Request) -> JSONResponse:
         registry=_registry,
     )
 
+    # ── Session-pin gate ────────────────────────────────────────────────
+    pin = _get_active_pin(session, now)
+    pinned_decision: RoutingDecision | None = None
+    pin_state = "fresh"
+
+    if pin is not None:
+        age = now - pin.last_turn_at
+        if age < _hard_window_s:
+            pinned_decision, pin_state = _try_hard_pin(pin, ctx, now)
+            if pinned_decision is None:
+                _session_pins.pop(session, None)
+                pin = None
+        else:
+            pin_state = "soft"
+    ctx.session_pin = pin
+
     response:   dict             = {}
     error_type: str | None       = None
     decision:   RoutingDecision | None = None
@@ -142,7 +247,10 @@ async def chat_completions(raw: Request) -> JSONResponse:
     for attempt in range(_escalation.max_escalations + 1):
         ctx.attempt_number = attempt
 
-        decision = _router.route(ctx)
+        if attempt == 0 and pinned_decision is not None:
+            decision = pinned_decision
+        else:
+            decision = _router.route(ctx)
         mutator  = _mutators.get(decision.mutator, _mutators["noop"])
         msgs     = mutator.mutate(req.messages, decision)
         if _tool_compressor_on:
@@ -154,12 +262,25 @@ async def chat_completions(raw: Request) -> JSONResponse:
         if error_type is None:
             break
 
+        # Pinned-model failure → drop the pin and let the next attempt route freely
+        if attempt == 0 and pinned_decision is not None:
+            _session_pins.pop(session, None)
+            ctx.session_pin = None
+            pinned_decision = None
+            pin_state = "evicted_post_failure"
+            continue
+
         ctx.last_error_type = error_type
         if not _escalation.should_escalate(error_type, attempt, ctx):
             break
 
     latency_ms = (time.perf_counter() - t0) * 1000
     usage      = response.get("usage", {})
+    cached_tokens = usage.get("_optmod_cached_tokens", 0)
+    prompt_tokens_val = usage.get("prompt_tokens", 0)
+
+    if error_type is None and decision is not None:
+        _update_pin(session, decision.model.name, cached_tokens, prompt_tokens_val, now)
 
     _log.append(LogEntry(
         ts=                _now_iso(),
@@ -180,8 +301,10 @@ async def chat_completions(raw: Request) -> JSONResponse:
         ok=                error_type is None,
         error_type=        error_type,
         latency_ms=        round(latency_ms, 2),
-        prompt_tokens=     usage.get("prompt_tokens", 0),
+        prompt_tokens=     prompt_tokens_val,
         completion_tokens= usage.get("completion_tokens", 0),
+        cached_tokens=     cached_tokens,
+        pin_state=         pin_state,
     ))
 
     if error_type and not response:
@@ -200,10 +323,18 @@ async def chat_completions(raw: Request) -> JSONResponse:
 
 @app.get("/optmod/status")
 async def status() -> JSONResponse:
+    now = time.time()
+    active_pins = sum(
+        1 for p in _session_pins.values()
+        if now - p.last_turn_at <= _soft_window_s
+    )
     return JSONResponse(content={
         "router":           _router.name,
         "primary":          _registry.primary.name,
         "tool_compressor":  _tool_compressor_on,
+        "active_pins":      active_pins,
+        "hard_window_s":    _hard_window_s,
+        "soft_window_s":    _soft_window_s,
         "models": [
             {"name": m.name, "tier": m.tier_name, "cost_per_1k": m.cost_per_1k}
             for m in _registry.all()

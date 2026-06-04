@@ -56,6 +56,7 @@ def load_config(path: str = "config.yaml") -> Config:
             thinking_mode=    m.get("thinking_mode", False),
             thinking_default= m.get("thinking_default", False),
             timeout_s=        m.get("timeout_s", 120.0),
+            supports_vision=  m.get("supports_vision", False),
         ))
 
     return Config(

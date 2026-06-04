@@ -6,6 +6,10 @@ perf_router_baseline: deepseek/deepseek-v4-flash
 perf_router_degradation_threshold: 0.15
 perf_router_min_similarity: 0.20
 
+session_pin_hard_window_s: 300
+session_pin_soft_window_s: 1800
+session_pin_soft_bonus_weight: 0.5
+
 tool_result_compressor: false
 
 # Oracle model — quality ceiling, used as primary

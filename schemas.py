@@ -38,6 +38,15 @@ class Features:
 
 
 @dataclass
+class SessionPin:
+    model_name:         str
+    last_turn_at:       float
+    last_cache_rate:    float = 0.0
+    last_prompt_tokens: int   = 0
+    turn_count:         int   = 0
+
+
+@dataclass
 class RoutingContext:
     request:         OpenAIChatRequest
     features:        Features
@@ -46,6 +55,7 @@ class RoutingContext:
     attempt_number:  int = 0
     last_error_type: str | None = None
     models_tried:    list[str] = field(default_factory=list)
+    session_pin:     SessionPin | None = None
 
 
 @dataclass
@@ -79,6 +89,8 @@ class LogEntry:
     latency_ms:        float
     prompt_tokens:     int
     completion_tokens: int
+    cached_tokens:     int = 0
+    pin_state:         str = "fresh"
 
     def to_jsonl(self) -> str:
         return json.dumps(dataclasses.asdict(self))

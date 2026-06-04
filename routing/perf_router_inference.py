@@ -419,6 +419,7 @@ class PerfRouterInference:
         has_images:            bool       = False,
         cost_cap_multiplier:   float      = 2.0,
         degradation_threshold: float      = 0.0,
+        pin_info:              dict | None = None,
     ) -> dict:
         """
         Route a query to the best model.
@@ -491,6 +492,18 @@ class PerfRouterInference:
             if eligible_mask.sum() == 0:
                 eligible_mask = np.ones(len(self._model_ids), dtype=bool)
 
+        # ── Step 0b: Resolve session-pin index + bonus factor ─────────────────
+        pin_idx: int | None = None
+        pin_bonus_factor    = 0.0
+        if pin_info and pin_info.get("model_id"):
+            for i, mid in enumerate(self._model_ids):
+                if mid == pin_info["model_id"]:
+                    pin_idx = i
+                    break
+            pin_bonus_factor = float(pin_info.get("cache_rate", 0.0)) * float(
+                pin_info.get("bonus_weight", 0.0)
+            )
+
         # ── Step 1: Classify task type ────────────────────────────────────────
         routing_mode      = "normal"
         primary_task_type = "unknown"
@@ -512,6 +525,8 @@ class PerfRouterInference:
         if routing_mode in ("fallback_ambiguous", "fallback_empty"):
             # Skip XGBoost entirely — pick cheapest eligible model
             costs_for_fallback = np.where(eligible_mask, self._costs_raw, np.inf)
+            if pin_idx is not None and eligible_mask[pin_idx] and pin_bonus_factor > 0:
+                costs_for_fallback[pin_idx] *= (1.0 - pin_bonus_factor)
             chosen_idx         = int(np.argmin(costs_for_fallback))
             quality_arr        = np.zeros(len(self._model_ids), dtype=np.float32)
             adjusted           = -self.cost_weight * self._costs_norm
@@ -525,6 +540,12 @@ class PerfRouterInference:
             # α is configurable at runtime without retraining
             adjusted    = quality_arr - self.cost_weight * self._costs_norm
 
+            # Session-pin soft bonus: credit the previously-used model with its
+            # observed cache savings so we don't flip away from a hot prompt cache
+            # unless the alternative is meaningfully cheaper/better.
+            if pin_idx is not None and eligible_mask[pin_idx] and pin_bonus_factor > 0:
+                adjusted[pin_idx] += self.cost_weight * pin_bonus_factor * self._costs_norm[pin_idx]
+
             if degradation_threshold > 0.0:
                 # Degradation threshold mode:
                 # Accept any model within X% of best quality, pick cheapest.
@@ -535,6 +556,8 @@ class PerfRouterInference:
                 if in_band.sum() == 0:
                     in_band = eligible_mask
                 costs_for_selection = np.where(in_band, self._costs_raw, np.inf)
+                if pin_idx is not None and in_band[pin_idx] and pin_bonus_factor > 0:
+                    costs_for_selection[pin_idx] *= (1.0 - pin_bonus_factor)
                 chosen_idx          = int(np.argmin(costs_for_selection))
             else:
                 # Standard mode: maximise adjusted utility (quality - α×cost)
@@ -597,6 +620,8 @@ class PerfRouterInference:
             "context_filtered":         int((~eligible_mask).sum()),
             "cost_cap_multiplier":      cost_cap_multiplier,
             "degradation_threshold":    degradation_threshold,
+            "pin_soft_bonus":           round(pin_bonus_factor, 4) if pin_idx is not None else 0.0,
+            "pin_model_id":             pin_info.get("model_id") if pin_info else None,
 
             # All model utilities (for debugging)
             "all_utilities": {

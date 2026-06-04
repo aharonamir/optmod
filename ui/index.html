@@ -855,6 +855,12 @@
     <div class="stat-sub"><span id="statErrAbs" class="down">—</span> failed</div>
   </div>
 
+  <div class="stat-card purple fade-in" style="animation-delay:0.2s">
+    <div class="stat-label">cache hit rate</div>
+    <div class="stat-value" id="statCacheRate">—</div>
+    <div class="stat-sub"><span id="statCachedTokens" class="teal">—</span> cached · <span id="statActivePins" class="amber">—</span> pinned</div>
+  </div>
+
   <!-- MODEL DISTRIBUTION -->
   <div class="card model-dist fade-in" style="animation-delay:0.2s">
     <div class="card-header">
@@ -1069,6 +1075,7 @@ async function fetchData() {
       if (status.router) data.router = status.router;
       compressorEnabled = status.tool_compressor ?? false;
       renderCompressorBtn();
+      data.active_pins = status.active_pins ?? 0;
     }
     render(data);
     setStatus(true);
@@ -1126,6 +1133,9 @@ function renderStats(d) {
   document.getElementById('statEscAbs').textContent     = fmt(d.escalation_count || 0);
   document.getElementById('statErrRate').textContent    = pct(d.error_rate ?? 0);
   document.getElementById('statErrAbs').textContent     = fmt(d.error_count || 0);
+  document.getElementById('statCacheRate').textContent    = pct(d.cache_hit_rate ?? 0);
+  document.getElementById('statCachedTokens').textContent = fmt(d.cached_tokens || 0);
+  document.getElementById('statActivePins').textContent   = fmt(d.active_pins || 0);
 }
 
 function renderRouter(d) {

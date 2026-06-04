@@ -99,6 +99,12 @@ class PerfRouterRouter(BaseRouter):
             min_sim_cfg if min_sim_cfg is not None else (min_sim_env or 0.20)
         )
 
+        bonus_cfg = config.get("session_pin_soft_bonus_weight")
+        bonus_env = os.environ.get("SESSION_PIN_SOFT_BONUS_WEIGHT")
+        self._soft_bonus_weight = float(
+            bonus_cfg if bonus_cfg is not None else (bonus_env or 0.5)
+        )
+
         try:
             from optmod.routing.perf_router_inference import PerfRouterInference
 
@@ -120,6 +126,20 @@ class PerfRouterRouter(BaseRouter):
             )
         except Exception as exc:
             logging.warning(f"[optmod] PerfRouterRouter failed to load: {exc}")
+
+    def _find_inference_model_id(self, registry_name: str) -> str | None:
+        """Inverse of _resolve_model: registry model name → inference _model_ids entry."""
+        if not self._ready:
+            return None
+        norm_target = _normalize(registry_name)
+        norm_local  = _normalize(registry_name.split("/")[-1])
+        for mid in self._perf_router._model_ids:
+            if _normalize(mid) == norm_target:
+                return mid
+        for mid in self._perf_router._model_ids:
+            if _normalize(mid.split("/")[-1]) == norm_local:
+                return mid
+        return None
 
     def route(self, ctx: RoutingContext) -> RoutingDecision:
         if not self._ready:
@@ -181,12 +201,24 @@ class PerfRouterRouter(BaseRouter):
 
         routing_text = "\n".join(last_3) if last_3 else ""
 
+        # ── Resolve session pin to inference model_id ─────────────────────────
+        pin_info = None
+        if ctx.session_pin is not None:
+            pin_mid = self._find_inference_model_id(ctx.session_pin.model_name)
+            if pin_mid is not None:
+                pin_info = {
+                    "model_id":     pin_mid,
+                    "cache_rate":   ctx.session_pin.last_cache_rate,
+                    "bonus_weight": self._soft_bonus_weight,
+                }
+
         # ── Route ─────────────────────────────────────────────────────────────
         decision = self._perf_router.route(
             routing_text,
             token_count           = token_count,
             has_images            = has_images,
             degradation_threshold = self._degradation_threshold,
+            pin_info              = pin_info,
         )
 
         chosen_id    = decision["decision_model"]
@@ -198,6 +230,7 @@ class PerfRouterRouter(BaseRouter):
         alpha          = decision.get("alpha", self._cost_weight)
         quality        = decision.get("predicted_quality", 0.5)
         routing_mode   = decision.get("routing_mode", "normal")
+        pin_bonus      = decision.get("pin_soft_bonus", 0.0)
 
         return RoutingDecision(
             model       = model,
@@ -208,7 +241,8 @@ class PerfRouterRouter(BaseRouter):
                 f"cost_saved={cost_saved_pct:+.1f}% "
                 f"α={alpha:.2f} "
                 f"degradation={self._degradation_threshold:.2f} "
-                f"mode={routing_mode}"
+                f"mode={routing_mode} "
+                f"pin_soft_bonus={pin_bonus:.3f}"
             ),
             confidence  = float(quality),
             router_name = self.name,
