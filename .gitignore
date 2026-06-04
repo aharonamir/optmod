@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# playwrite mcp
+.playwright-mcp/
+routing.log.jsonl
