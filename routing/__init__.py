@@ -33,7 +33,7 @@ def build_router(name: str, config: dict) -> BaseRouter:
     from .rule_based         import RuleBasedRouter
     from .decision_tree      import DecisionTreeRouter
     from .trouter_router     import TRouterRouter
-    from .perf_router_router import PerfRouterRouter
+    from .perfrouter          import PerfRouterRouter
 
     mapping = {
         "passthrough":   PassthroughRouter,

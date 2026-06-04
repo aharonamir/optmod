@@ -106,7 +106,7 @@ class PerfRouterRouter(BaseRouter):
         )
 
         try:
-            from optmod.routing.perf_router_inference import PerfRouterInference
+            from optmod.routing.perfrouter.inference import PerfRouterInference
 
             self._perf_router = PerfRouterInference(
                 router_path              = _DIR / "perf_router.pkl",
