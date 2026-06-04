@@ -2,6 +2,8 @@
 
 A local OpenAI-compatible routing proxy that selects the optimal LLM for each request — transparently, within a single HTTP call.
 
+<img width="1834" height="852" alt="image" src="https://github.com/user-attachments/assets/1ee67d2c-4a20-43ab-b3cc-4c13ad62f555" />
+
 Point any OpenAI-compatible agent (Hermes, LangChain, etc.) at `http://localhost:8765/v1` and optmod classifies each request, picks the right model, escalates on failure, and returns one clean response. The calling agent never knows a proxy is in the middle.
 
 ## How it works
