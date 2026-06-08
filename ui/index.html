@@ -823,6 +823,7 @@
       <button class="router-btn" data-router="perf_router"  onclick="switchRouter('perf_router')">perf_router</button>
     </div>
     <button class="action-btn" id="compressorBtn" onclick="toggleCompressor()">⎗ COMPRESS: OFF</button>
+    <button class="action-btn" id="sessionPinBtn" onclick="toggleSessionPin()">⬡ PIN: ON</button>
     <button class="action-btn danger" id="clearBtn" onclick="clearLog()">⊘ CLEAR LOG</button>
     <button class="action-btn" id="reloadBtn" onclick="reloadServer()">⟳ RELOAD</button>
   </div>
@@ -960,7 +961,8 @@ let refreshTimer   = null;
 let countdownTimer = null;
 let prevTotal      = 0;
 let paused         = false;
-let compressorEnabled = false;
+let compressorEnabled  = false;
+let sessionPinEnabled  = true;
 let activeTab      = 'models';
 
 // Cached meta values per tab (so switching tabs updates the meta label)
@@ -1088,7 +1090,9 @@ async function fetchData() {
       }
       if (status.router) data.router = status.router;
       compressorEnabled = status.tool_compressor ?? false;
+      sessionPinEnabled = status.session_pin_enabled ?? true;
       renderCompressorBtn();
+      renderSessionPinBtn();
       data.active_pins = status.active_pins ?? 0;
     }
     render(data);
@@ -1445,10 +1449,11 @@ function mockData() {
     escalation_count: 160,
     error_rate:       0.066,
     error_count:      122,
-    cache_hit_rate:   0.72,
-    cached_tokens:    840000,
-    active_pins:      3,
-    router:           'RuleBasedRouter',
+    cache_hit_rate:      0.72,
+    cached_tokens:       840000,
+    active_pins:         3,
+    session_pin_enabled: true,
+    router:              'RuleBasedRouter',
     model_tiers: {
       'openai/gpt-oss-120b:free':       'fast',
       'arcee-ai/trinity-large-thinking': 'reasoning',
@@ -1515,6 +1520,35 @@ async function toggleCompressor() {
       const d = await r.json();
       compressorEnabled = d.tool_compressor;
       renderCompressorBtn();
+    }
+  } catch(_) {}
+}
+
+// ── SESSION PIN TOGGLE ────────────────────────────
+function renderSessionPinBtn() {
+  const btn = document.getElementById('sessionPinBtn');
+  if (sessionPinEnabled) {
+    btn.textContent = '⬡ PIN: ON';
+    btn.style.color       = 'var(--teal)';
+    btn.style.borderColor = 'var(--teal)';
+    btn.style.background  = 'rgba(0,194,212,0.08)';
+  } else {
+    btn.textContent = '⬡ PIN: OFF';
+    btn.style.color       = '';
+    btn.style.borderColor = '';
+    btn.style.background  = '';
+  }
+}
+
+async function toggleSessionPin() {
+  const next  = !sessionPinEnabled;
+  const state = next ? 'on' : 'off';
+  try {
+    const r = await fetch(`${API_BASE}/optmod/session-pin/${state}`, {method: 'POST'});
+    if (r.ok) {
+      const d = await r.json();
+      sessionPinEnabled = d.session_pin_enabled;
+      renderSessionPinBtn();
     }
   } catch(_) {}
 }

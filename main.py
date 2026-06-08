@@ -33,6 +33,7 @@ _forwarder:            ModelForwarder      | None = None
 _log:                  RoutingLog          | None = None
 _config:               Config              | None = None
 _tool_compressor_on:   bool               = False
+_session_pin_enabled:  bool               = True
 _session_pins:         dict[str, SessionPin] = {}
 _hard_window_s:        float              = 300.0
 _soft_window_s:        float              = 1800.0
@@ -42,12 +43,13 @@ _soft_window_s:        float              = 1800.0
 async def lifespan(app: FastAPI):
     global _registry, _extractor, _router, _mutators
     global _escalation, _forwarder, _log, _config, _tool_compressor_on
-    global _hard_window_s, _soft_window_s
+    global _hard_window_s, _soft_window_s, _session_pin_enabled
 
     _config     = load_config("config.yaml")
     _tool_compressor_on = bool(_config.dict().get("tool_result_compressor", False))
     _hard_window_s = float(_config.dict().get("session_pin_hard_window_s", 300.0))
     _soft_window_s = float(_config.dict().get("session_pin_soft_window_s", 1800.0))
+    _session_pin_enabled = bool(_config.dict().get("session_pin_enabled", True))
     _session_pins.clear()
     _registry   = ModelRegistry(_config.models, _config.primary_model)
     _extractor  = FeatureExtractor()
@@ -225,7 +227,7 @@ async def chat_completions(raw: Request) -> JSONResponse:
     )
 
     # ── Session-pin gate ────────────────────────────────────────────────
-    pin = _get_active_pin(session, now)
+    pin = _get_active_pin(session, now) if _session_pin_enabled else None
     pinned_decision: RoutingDecision | None = None
     pin_state = "fresh"
 
@@ -279,7 +281,7 @@ async def chat_completions(raw: Request) -> JSONResponse:
     cached_tokens = usage.get("_optmod_cached_tokens", 0)
     prompt_tokens_val = usage.get("prompt_tokens", 0)
 
-    if error_type is None and decision is not None:
+    if error_type is None and decision is not None and _session_pin_enabled:
         _update_pin(session, decision.model.name, cached_tokens, prompt_tokens_val, now)
 
     _log.append(LogEntry(
@@ -329,12 +331,13 @@ async def status() -> JSONResponse:
         if now - p.last_turn_at <= _soft_window_s
     )
     return JSONResponse(content={
-        "router":           _router.name,
-        "primary":          _registry.primary.name,
-        "tool_compressor":  _tool_compressor_on,
-        "active_pins":      active_pins,
-        "hard_window_s":    _hard_window_s,
-        "soft_window_s":    _soft_window_s,
+        "router":              _router.name,
+        "primary":             _registry.primary.name,
+        "tool_compressor":     _tool_compressor_on,
+        "session_pin_enabled": _session_pin_enabled,
+        "active_pins":         active_pins,
+        "hard_window_s":       _hard_window_s,
+        "soft_window_s":       _soft_window_s,
         "models": [
             {"name": m.name, "tier": m.tier_name, "cost_per_1k": m.cost_per_1k}
             for m in _registry.all()
@@ -365,6 +368,17 @@ async def set_compressor(state: str) -> JSONResponse:
         return JSONResponse(status_code=400, content={"error": f"unknown state: {state}"})
     _tool_compressor_on = state == "on"
     return JSONResponse(content={"tool_compressor": _tool_compressor_on, "ok": True})
+
+
+@app.post("/optmod/session-pin/{state}")
+async def set_session_pin(state: str) -> JSONResponse:
+    global _session_pin_enabled
+    if state not in ("on", "off"):
+        return JSONResponse(status_code=400, content={"error": f"unknown state: {state}"})
+    _session_pin_enabled = state == "on"
+    if not _session_pin_enabled:
+        _session_pins.clear()
+    return JSONResponse(content={"session_pin_enabled": _session_pin_enabled, "ok": True})
 
 
 @app.post("/optmod/router/{name}")
