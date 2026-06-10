@@ -4,8 +4,15 @@ import httpx
 from fastapi.testclient import TestClient
 from optmod.main import app
 
-# All models route through OpenRouter (from config.yaml)
-OPENROUTER = "https://openrouter.ai/api/v1"
+# All provider base URLs that optmod might route to
+_PROVIDERS = [
+    "https://openrouter.ai/api/v1",
+    "https://api.deepseek.com",
+    "https://generativelanguage.googleapis.com/v1beta/openai",
+    "https://api.anthropic.com/v1",
+    "https://api.openai.com/v1",
+    "https://api.moonshot.cn/v1",
+]
 
 OK_RESPONSE = {
     "id": "test", "object": "chat.completion", "created": 1,
@@ -23,9 +30,10 @@ def client():
 
 @respx.mock
 def test_simple_route_succeeds(client):
-    respx.post(f"{OPENROUTER}/chat/completions").mock(
-        return_value=httpx.Response(200, json=OK_RESPONSE)
-    )
+    for p in _PROVIDERS:
+        respx.post(f"{p}/chat/completions").mock(
+            return_value=httpx.Response(200, json=OK_RESPONSE)
+        )
     r = client.post("/v1/chat/completions", json={
         "model": "optmod",
         "messages": [{"role": "user", "content": "summarize this briefly"}],
@@ -35,13 +43,18 @@ def test_simple_route_succeeds(client):
 
 @respx.mock
 def test_escalation_on_429(client):
-    """Fast model returns 429; proxy escalates to reasoning (same OpenRouter URL) and succeeds."""
-    respx.post(f"{OPENROUTER}/chat/completions").mock(
-        side_effect=[
-            httpx.Response(429),
-            httpx.Response(200, json=OK_RESPONSE),
-        ]
-    )
+    """First chosen model returns 429; proxy escalates and the next attempt succeeds."""
+    counter = {"n": 0}
+
+    def respond(request):
+        counter["n"] += 1
+        if counter["n"] == 1:
+            return httpx.Response(429)
+        return httpx.Response(200, json=OK_RESPONSE)
+
+    for p in _PROVIDERS:
+        respx.post(f"{p}/chat/completions").mock(side_effect=respond)
+
     r = client.post("/v1/chat/completions", json={
         "model": "optmod",
         "messages": [{"role": "user", "content": "test"}],
@@ -51,10 +64,11 @@ def test_escalation_on_429(client):
 
 @respx.mock
 def test_all_models_fail_returns_502(client):
-    """All models fail → 502. All three models share the OpenRouter base URL."""
-    respx.post(f"{OPENROUTER}/chat/completions").mock(
-        side_effect=[httpx.Response(500), httpx.Response(500), httpx.Response(500)]
-    )
+    """All models fail → 502."""
+    for p in _PROVIDERS:
+        respx.post(f"{p}/chat/completions").mock(
+            return_value=httpx.Response(500)
+        )
     r = client.post("/v1/chat/completions", json={
         "model": "optmod",
         "messages": [{"role": "user", "content": "test"}],
@@ -65,9 +79,10 @@ def test_all_models_fail_returns_502(client):
 @respx.mock
 def test_auth_error_no_escalation(client):
     """401 is non-retryable → 502 immediately, no escalation."""
-    respx.post(f"{OPENROUTER}/chat/completions").mock(
-        return_value=httpx.Response(401)
-    )
+    for p in _PROVIDERS:
+        respx.post(f"{p}/chat/completions").mock(
+            return_value=httpx.Response(401)
+        )
     r = client.post("/v1/chat/completions", json={
         "model": "optmod",
         "messages": [{"role": "user", "content": "test"}],

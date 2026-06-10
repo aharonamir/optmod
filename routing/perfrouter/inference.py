@@ -137,12 +137,14 @@ class PerfRouterInference:
         encoder_name:   str   = DEFAULT_ENCODER,
         baseline_model: str   = BASELINE_MODEL_ID,
         min_similarity_threshold: float = DEFAULT_MIN_SIMILARITY,
+        models_yaml_path: "str | Path | None" = None,
     ):
         self.cost_weight               = cost_weight
         self.top_k                     = top_k
         self._baseline_model_id        = baseline_model
         self._min_similarity_threshold = min_similarity_threshold
         self._ready                    = False
+        self._models_yaml_path         = models_yaml_path
 
         try:
             self._load(router_path, taxonomy_path, registry_path,
@@ -194,7 +196,12 @@ class PerfRouterInference:
         # Pricing changes over time. models.yaml is the source of truth
         # that the operator updates. We prefer it over training-time costs.
         self._runtime_pricing: dict[str, dict] = {}
-        models_yaml_path = Path(registry_path).parent / "models.yaml"
+        # Use explicit path if provided (e.g. ../perfrouter/models.yaml); otherwise
+        # fall back to a sibling models.yaml in the same directory as the registry.
+        if self._models_yaml_path is not None:
+            models_yaml_path = Path(self._models_yaml_path)
+        else:
+            models_yaml_path = Path(registry_path).parent / "models.yaml"
         if models_yaml_path.exists():
             try:
                 import yaml as _yaml

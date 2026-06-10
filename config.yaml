@@ -1,156 +1,81 @@
-# Active router: passthrough | rule_based | decision_tree | trouter | perf_router
 router: perf_router
 
-perf_router_cost_weight: 0.3
-perf_router_baseline: deepseek/deepseek-v4-flash
-perf_router_degradation_threshold: 0.15
-perf_router_min_similarity: 0.20
+# ── Provider routing (shared across all strategies) ──────────────────────────
+providers:
+  openrouter:
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    timeout_s: 120.0
+  deepseek:
+    base_url: https://api.deepseek.com
+    api_key_env: DEEPSEEK_API_KEY
+    timeout_s: 120.0
+  google:
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai
+    api_key_env: GOOGLE_API_KEY
+    timeout_s: 90.0
+  anthropic:
+    base_url: https://api.anthropic.com/v1
+    api_key_env: ANTHROPIC_API_KEY
+    timeout_s: 180.0
+  openai:
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    timeout_s: 120.0
+  moonshot:
+    base_url: https://api.moonshot.cn/v1
+    api_key_env: MOONSHOT_API_KEY
+    timeout_s: 120.0
 
-session_pin_hard_window_s: 300
-session_pin_soft_window_s: 1800
-session_pin_soft_bonus_weight: 0.5
+# Per-model overrides (take precedence over perfrouter data and provider defaults)
+model_overrides:
+  deepseek/deepseek-v4-flash:
+    thinking_mode: false   # model supports CoT but we don't activate it by default
+  deepseek/deepseek-v4-pro:
+    timeout_s: 240.0
+    thinking_default: true
+  anthropic/claude-sonnet-4.6:
+    thinking_default: true
+
+# ── PerfRouter policy ─────────────────────────────────────────────────────────
+perf_router:
+  model_set: curated           # curated | full
+  perfrouter_data_dir: ../perfrouter/data
+  perfrouter_models_yaml: ../perfrouter/models.yaml
+  checkpoint: auto             # auto = look in {data_dir}/../models/perf_router.pkl, then {data_dir}/
+  cost_weight: 0.3
+  degradation_threshold: 0.15
+  min_similarity: 0.20
+  baseline: deepseek/deepseek-v4-flash
+  cost_cap_multiplier: 2.0     # null to disable cap entirely
+
+# ── TRouter policy ────────────────────────────────────────────────────────────
+trouter:
+  checkpoint: routing/trouter_weights.pt
+
+# ── Shared ────────────────────────────────────────────────────────────────────
+session_pin:
+  hard_window_s: 300
+  soft_window_s: 1800
+  soft_bonus_weight: 0.5
 
 tool_result_compressor: false
-
-# Oracle model — quality ceiling, used as primary
-primary_model: deepseek-v4-flash
-
-# Path to WildClawBench-trained decision tree (created in Phase 2)
+primary_model: deepseek/deepseek-v4-flash
 policy_path: routing_policy.pkl
-
-# JSONL log path (relative to working directory)
 log_path: routing.log.jsonl
-
 escalation:
   max_escalations: 2
 
-models:
-  - name: openai/gpt-oss-120b:free
-    provider: openrouter
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
-    tier: 0
-    tier_name: fast
-    context_window: 128000
-    cost_per_1k: 0.0
-    supports_tools: true
-    thinking_mode: false
-    thinking_default: false
-    timeout_s: 60.0
-
-  - name: deepseek-v4-flash
-    provider: deepseek
-    base_url: https://api.deepseek.com
-    api_key_env: DEEPSEEK_API_KEY
-    tier: 1
-    tier_name: reasoning
-    context_window: 256000
-    cost_per_1k: 0.00014
-    supports_tools: true
-    thinking_mode: false
-    thinking_default: false
-    timeout_s: 120.0
-  
-  - name: deepseek-v4-pro
-    provider: deepseek
-    base_url: https://api.deepseek.com
-    api_key_env: DEEPSEEK_API_KEY
-    tier: 2
-    tier_name: oracle
-    context_window: 1000000
-    cost_per_1k: 0.000435
-    supports_tools: true
-    thinking_mode: true
-    thinking_default: false
-    timeout_s: 180.0
-
-  - name: nvidia/nemotron-3-super-120b-a12b:free
-    provider: openrouter
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
-    tier: 0
-    tier_name: fast
-    context_window: 1000000
-    cost_per_1k: 0.0
-    supports_tools: true
-    thinking_mode: true
-    thinking_default: false
-    timeout_s: 90.0
-
-  - name: google/gemini-3.1-flash-lite
-    provider: openrouter
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
-    tier: 1
-    tier_name: reasoning
-    context_window: 1000000
-    cost_per_1k: 0.0001
-    supports_tools: true
-    thinking_mode: false
-    thinking_default: false
-    timeout_s: 90.0
-
-  - name: tencent/hy3-preview
-    provider: openrouter
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
-    tier: 1
-    tier_name: reasoning
-    context_window: 256000
-    cost_per_1k: 0.000063
-    supports_tools: true
-    thinking_mode: true
-    thinking_default: false
-    timeout_s: 120.0
-
-  - name: anthropic/claude-sonnet-4.6
-    provider: openrouter
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
-    tier: 2
-    tier_name: oracle
-    context_window: 200000
-    cost_per_1k: 0.003
-    supports_tools: true
-    thinking_mode: true
-    thinking_default: false
-    timeout_s: 180.0
-
-  - name: xiaomi/mimo-v2.5-pro
-    provider: openrouter
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
-    tier: 2
-    tier_name: oracle
-    context_window: 128000
-    cost_per_1k: 0.000435
-    supports_tools: true
-    thinking_mode: false
-    thinking_default: false
-    timeout_s: 120.0
-
-  - name: moonshotai/kimi-k2.6
-    provider: openrouter
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
-    tier: 2
-    tier_name: oracle
-    context_window: 128000
-    cost_per_1k: 0.000684
-    supports_tools: true
-    thinking_mode: false
-    thinking_default: false
-    timeout_s: 120.0
-
-  - name: openai/gpt-4o-mini
-    provider: openrouter
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
-    tier: 0
-    tier_name: fast
-    context_window: 128000
-    cost_per_1k: 0.00015
-    supports_tools: true
-    thinking_mode: false
-    thinking_default: false
-    timeout_s: 60.0
+# ── Active model set (when model_set: curated) ───────────────────────────────
+# IDs must match perfrouter/models.yaml `id` field exactly.
+curated_models:
+  - nvidia/nemotron-3-super-120b-a12b:free
+  - deepseek/deepseek-v4-flash
+  - deepseek/deepseek-v4-pro
+  - google/gemini-3.1-flash-lite
+  - tencent/hy3-preview
+  - anthropic/claude-sonnet-4.6
+  - xiaomi/mimo-v2.5-pro
+  - moonshotai/kimi-k2.6
+  - openai/gpt-4o-mini
+  - openai/gpt-oss-120b:free

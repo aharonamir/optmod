@@ -12,12 +12,13 @@ stats_router = APIRouter()
 
 LOG_PATH = Path("routing.log.jsonl")
 
-# Authoritative tier map read once from config.yaml at import time.
+# Authoritative tier map read once at import time.
 # Falls back to empty dict (heuristics take over) if config is unavailable.
 def _load_tier_map() -> dict[str, str]:
     try:
-        raw = yaml.safe_load(Path("config.yaml").read_text())
-        return {m["name"]: m["tier_name"] for m in raw.get("models", [])}
+        from optmod.config import load_config
+        cfg = load_config()
+        return {m.name: m.tier_name for m in cfg.models}
     except Exception:
         return {}
 

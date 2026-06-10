@@ -47,8 +47,13 @@ async def lifespan(app: FastAPI):
 
     _config     = load_config("config.yaml")
     _tool_compressor_on = bool(_config.dict().get("tool_result_compressor", False))
-    _hard_window_s = float(_config.dict().get("session_pin_hard_window_s", 300.0))
-    _soft_window_s = float(_config.dict().get("session_pin_soft_window_s", 1800.0))
+    pin_cfg = _config._raw.get("session_pin", {})
+    _hard_window_s = float(
+        pin_cfg.get("hard_window_s") or _config._raw.get("session_pin_hard_window_s", 300.0)
+    )
+    _soft_window_s = float(
+        pin_cfg.get("soft_window_s") or _config._raw.get("session_pin_soft_window_s", 1800.0)
+    )
     _session_pin_enabled = bool(_config.dict().get("session_pin_enabled", True))
     _session_pins.clear()
     _registry   = ModelRegistry(_config.models, _config.primary_model)

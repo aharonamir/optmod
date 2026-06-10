@@ -23,6 +23,15 @@ trouter = [
     "torch>=2.0",
     "sentence-transformers>=3.0",
 ]
+perfrouter = [
+    "perfrouter",
+]
+
+[tool.uv.sources]
+# Install the sibling perfrouter package directly from disk.
+# Run: uv pip install -e '.[perfrouter]'
+# uv resolves "perfrouter" to the local path below instead of PyPI.
+perfrouter = { path = "../perfrouter", editable = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

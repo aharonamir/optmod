@@ -27,7 +27,7 @@ class ModelForwarder:
     ) -> tuple[dict, str | None]:
         client = self._get_client(model.base_url, model.api_key)
         payload = {
-            "model":    model.name,
+            "model":    model.api_model_name or model.name,
             "messages": [m.model_dump(exclude_none=True) for m in messages],
             **req.model_dump(
                 exclude={"model", "messages", "stream", "stream_options"},

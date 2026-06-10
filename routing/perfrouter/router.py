@@ -1,3 +1,4 @@
+import inspect
 import logging
 import os
 import re
@@ -74,58 +75,147 @@ def _extract_content(raw: str) -> str:
     return raw
 
 
+def _resolve_data_paths(perf_cfg: dict) -> tuple[Path | None, Path | None, Path | None, Path | None, Path | None]:
+    """
+    Resolve (router, taxonomy, registry, features, models_yaml) from config.
+
+    Returns None for each path if not found in the configured location.
+    Falls back to local _DIR copies with a deprecation warning when canonical
+    paths exist but some files are missing.
+    """
+    data_dir_str = perf_cfg.get("perfrouter_data_dir")
+    if not data_dir_str:
+        return None, None, None, None, None
+
+    data_dir = Path(data_dir_str).resolve()
+    taxonomy  = data_dir / "task_taxonomy.json"
+    registry  = data_dir / "model_registry.json"
+    features  = data_dir / "model_features.csv"
+
+    # models.yaml for runtime pricing
+    models_yaml_str = perf_cfg.get("perfrouter_models_yaml")
+    models_yaml = Path(models_yaml_str).resolve() if models_yaml_str else data_dir.parent / "models.yaml"
+
+    # Checkpoint: auto → prefer data_dir/../models/, fall back to data_dir/
+    ckpt_cfg = perf_cfg.get("checkpoint", "auto")
+    if ckpt_cfg == "auto":
+        candidate_models = data_dir.parent / "models" / "perf_router.pkl"
+        candidate_data   = data_dir / "perf_router.pkl"
+        if candidate_models.exists():
+            router_path = candidate_models
+        elif candidate_data.exists():
+            router_path = candidate_data
+        else:
+            router_path = None
+    elif ckpt_cfg:
+        router_path = Path(ckpt_cfg).resolve()
+        if not router_path.exists():
+            router_path = None
+    else:
+        router_path = None
+
+    if router_path and router_path.exists() and taxonomy.exists() and registry.exists() and features.exists():
+        return router_path, taxonomy, registry, features, models_yaml
+
+    found = [p for p in (taxonomy, registry, features) if p.exists()]
+    if found:
+        logging.warning(
+            "[optmod] PerfRouter: not all canonical data files present in %s "
+            "(found %d/3). Falling back to local copies in %s.",
+            data_dir, len(found), _DIR,
+        )
+    return None, None, None, None, None
+
+
 class PerfRouterRouter(BaseRouter):
     def __init__(self, config: dict) -> None:
         super().__init__(config)
         self._ready = False
 
-        alpha_cfg = config.get("perf_router_cost_weight")
+        perf_cfg = config.get("perf_router", {})
+
+        # ── Policy parameters (nested config with flat-key fallback) ──────────
+        alpha_cfg = perf_cfg.get("cost_weight") or config.get("perf_router_cost_weight")
+        if config.get("perf_router_cost_weight") and not perf_cfg.get("cost_weight"):
+            logging.warning("[optmod] Deprecated flat key perf_router_cost_weight — use perf_router.cost_weight")
         alpha_env = os.environ.get("PERF_ROUTER_COST_WEIGHT")
         self._cost_weight = float(alpha_cfg or alpha_env or _DEFAULT_COST_WEIGHT)
 
-        baseline_cfg = config.get("perf_router_baseline")
+        baseline_cfg = perf_cfg.get("baseline") or config.get("perf_router_baseline")
         baseline_env = os.environ.get("PERF_ROUTER_BASELINE")
         self._baseline = baseline_cfg or baseline_env or _DEFAULT_BASELINE
 
-        threshold_cfg = config.get("perf_router_degradation_threshold")
+        threshold_cfg = (perf_cfg.get("degradation_threshold")
+                         if "degradation_threshold" in perf_cfg
+                         else config.get("perf_router_degradation_threshold"))
         threshold_env = os.environ.get("PERF_ROUTER_DEGRADATION_THRESHOLD")
         self._degradation_threshold = float(
             threshold_cfg if threshold_cfg is not None else (threshold_env or 0.0)
         )
 
-        min_sim_cfg = config.get("perf_router_min_similarity")
+        min_sim_cfg = (perf_cfg.get("min_similarity")
+                       if "min_similarity" in perf_cfg
+                       else config.get("perf_router_min_similarity"))
         min_sim_env = os.environ.get("PERF_ROUTER_MIN_SIMILARITY")
         self._min_similarity = float(
             min_sim_cfg if min_sim_cfg is not None else (min_sim_env or 0.20)
         )
 
-        bonus_cfg = config.get("session_pin_soft_bonus_weight")
+        pin_cfg = config.get("session_pin", {})
+        bonus_cfg = (pin_cfg.get("soft_bonus_weight")
+                     or config.get("session_pin_soft_bonus_weight"))
         bonus_env = os.environ.get("SESSION_PIN_SOFT_BONUS_WEIGHT")
         self._soft_bonus_weight = float(
             bonus_cfg if bonus_cfg is not None else (bonus_env or 0.5)
         )
 
-        try:
-            from optmod.routing.perfrouter.inference import PerfRouterInference
+        # cost_cap_multiplier: YAML null → Python None → pass as float("inf") to inference
+        cap_raw = perf_cfg.get("cost_cap_multiplier", 2.0)
+        self._cost_cap_multiplier = cap_raw  # None means cap disabled
 
-            self._perf_router = PerfRouterInference(
-                router_path              = _DIR / "perf_router.pkl",
-                taxonomy_path            = _DIR / "task_taxonomy.json",
-                registry_path            = _DIR / "model_registry.json",
-                features_path            = _DIR / "model_features.csv",
-                cost_weight              = self._cost_weight,
-                baseline_model           = self._baseline,
-                min_similarity_threshold = self._min_similarity,
-            )
+        # ── Data path resolution ──────────────────────────────────────────────
+        router_path, taxonomy_path, registry_path, features_path, models_yaml_path = \
+            _resolve_data_paths(perf_cfg)
+
+        # Fall back to local copies (backward compat for existing deployments)
+        if router_path is None:
+            router_path    = _DIR / "perf_router.pkl"
+            taxonomy_path  = _DIR / "task_taxonomy.json"
+            registry_path  = _DIR / "model_registry.json"
+            features_path  = _DIR / "model_features.csv"
+            models_yaml_path = _DIR / "models.yaml"
+
+        try:
+            # Prefer perfrouter package if installed; fall back to local copy
+            try:
+                from perfrouter.inference.perf_router_inference import PerfRouterInference
+            except ImportError:
+                from optmod.routing.perfrouter.inference import PerfRouterInference
+
+            # Pass models_yaml_path only if the class supports it
+            init_kwargs: dict = {
+                "router_path":              router_path,
+                "taxonomy_path":            taxonomy_path,
+                "registry_path":            registry_path,
+                "features_path":            features_path,
+                "cost_weight":              self._cost_weight,
+                "baseline_model":           self._baseline,
+                "min_similarity_threshold": self._min_similarity,
+            }
+            if "models_yaml_path" in inspect.signature(PerfRouterInference.__init__).parameters:
+                init_kwargs["models_yaml_path"] = models_yaml_path
+
+            self._perf_router = PerfRouterInference(**init_kwargs)
             self._ready = True
+            cap_str = str(self._cost_cap_multiplier) if self._cost_cap_multiplier is not None else "none"
             logging.info(
-                f"[optmod] PerfRouterRouter loaded "
-                f"(α={self._cost_weight}, baseline={self._baseline}, "
-                f"degradation={self._degradation_threshold}, "
-                f"min_sim={self._min_similarity})"
+                "[optmod] PerfRouterRouter loaded "
+                "(α=%s, baseline=%s, degradation=%s, min_sim=%s, cost_cap=%s)",
+                self._cost_weight, self._baseline,
+                self._degradation_threshold, self._min_similarity, cap_str,
             )
         except Exception as exc:
-            logging.warning(f"[optmod] PerfRouterRouter failed to load: {exc}")
+            logging.warning("[optmod] PerfRouterRouter failed to load: %s", exc)
 
     def _find_inference_model_id(self, registry_name: str) -> str | None:
         """Inverse of _resolve_model: registry model name → inference _model_ids entry."""
@@ -147,7 +237,7 @@ class PerfRouterRouter(BaseRouter):
         try:
             return self._route(ctx)
         except Exception as exc:
-            logging.warning(f"[optmod] PerfRouterRouter.route error: {exc}")
+            logging.warning("[optmod] PerfRouterRouter.route error: %s", exc)
             return self._passthrough(ctx, f"perf_router error: {exc}")
 
     def _route(self, ctx: RoutingContext) -> RoutingDecision:
@@ -212,6 +302,9 @@ class PerfRouterRouter(BaseRouter):
                     "bonus_weight": self._soft_bonus_weight,
                 }
 
+        # ── Cost cap: None → float("inf") (disabled) ─────────────────────────
+        cap = float(self._cost_cap_multiplier) if self._cost_cap_multiplier is not None else float("inf")
+
         # ── Route ─────────────────────────────────────────────────────────────
         decision = self._perf_router.route(
             routing_text,
@@ -219,6 +312,7 @@ class PerfRouterRouter(BaseRouter):
             has_images            = has_images,
             degradation_threshold = self._degradation_threshold,
             pin_info              = pin_info,
+            cost_cap_multiplier   = cap,
         )
 
         chosen_id    = decision["decision_model"]
@@ -231,6 +325,7 @@ class PerfRouterRouter(BaseRouter):
         quality        = decision.get("predicted_quality", 0.5)
         routing_mode   = decision.get("routing_mode", "normal")
         pin_bonus      = decision.get("pin_soft_bonus", 0.0)
+        cap_str        = str(self._cost_cap_multiplier) if self._cost_cap_multiplier is not None else "none"
 
         return RoutingDecision(
             model       = model,
@@ -242,7 +337,8 @@ class PerfRouterRouter(BaseRouter):
                 f"α={alpha:.2f} "
                 f"degradation={self._degradation_threshold:.2f} "
                 f"mode={routing_mode} "
-                f"pin_soft_bonus={pin_bonus:.3f}"
+                f"pin_soft_bonus={pin_bonus:.3f} "
+                f"cost_cap={cap_str}"
             ),
             confidence  = float(quality),
             router_name = self.name,
