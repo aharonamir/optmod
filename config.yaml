@@ -39,7 +39,7 @@ model_overrides:
 
 # ── PerfRouter policy ─────────────────────────────────────────────────────────
 perf_router:
-  model_set: curated           # curated | full
+  model_set: full           # curated | full
   perfrouter_data_dir: ../perfrouter/data
   perfrouter_models_yaml: ../perfrouter/models.yaml
   checkpoint: auto             # auto = look in {data_dir}/../models/perf_router.pkl, then {data_dir}/
