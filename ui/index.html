@@ -981,6 +981,7 @@ const tabMeta = { models: '—', tasks: '—', escalation: '—' };
 const seenRowKeys = new Set();
 let costRates    = {};
 let modelTierMap = {};
+let baselineModel = '';   // reference for "saved vs always-<model>"; from /optmod/status
 
 // ── COLOR / LABEL MAPS ────────────────────────────
 const TIER_COLORS = {
@@ -1099,6 +1100,7 @@ async function fetchData() {
         modelTierMap[m.name] = m.tier;
       }
       if (status.router) data.router = status.router;
+      baselineModel = status.baseline_model || status.primary || '';
       compressorEnabled = status.tool_compressor ?? false;
       sessionPinEnabled = status.session_pin_enabled ?? true;
       renderCompressorBtn();
@@ -1116,6 +1118,7 @@ async function fetchData() {
       'arcee-ai/trinity-large-thinking': 0.00022,
       'deepseek/deepseek-v4-flash':      0.00014,
     };
+    baselineModel = 'deepseek/deepseek-v4-flash';
     modelTierMap = {
       'openai/gpt-oss-120b:free':       'fast',
       'arcee-ai/trinity-large-thinking': 'reasoning',
@@ -1208,8 +1211,7 @@ function renderModelDist(d) {
   tabMeta.models = metaText;
   if (activeTab === 'models') document.getElementById('analyticsMeta').textContent = metaText;
 
-  const oracleEntry     = Object.entries(modelTierMap).find(([, t]) => t === 'oracle');
-  const oracleName      = oracleEntry ? oracleEntry[0] : null;
+  const oracleName      = baselineModel || null;
   const oracleCostPer1k = oracleName ? (costRates[oracleName] || 0) : 0;
 
   let totalActualCost       = 0;
@@ -1251,13 +1253,13 @@ function renderModelDist(d) {
       </div>`;
   }).join('');
 
-  const savings     = Math.max(0, oracleHypotheticalCost - totalActualCost);
+  const savings     = oracleHypotheticalCost - totalActualCost;   // negative = costlier than baseline
   const savingsHtml = oracleCostPer1k > 0
     ? `<div class="cost-summary">
         <span class="savings-label">window cost</span>
         <span style="color:var(--text);font-weight:600">${fmtDollars(totalActualCost)}</span>
-        <span class="savings-label" style="margin-left:8px">saved vs always-oracle</span>
-        <span class="savings-value">${fmtDollars(savings)}</span>
+        <span class="savings-label" style="margin-left:8px" title="${oracleName}">saved vs always-${shortModel(oracleName)}</span>
+        <span class="savings-value"${savings < 0 ? ' style="color:var(--red)"' : ''}>${savings < 0 ? '−' : ''}${fmtDollars(Math.abs(savings))}</span>
        </div>`
     : '';
 

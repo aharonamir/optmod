@@ -137,6 +137,12 @@ model_health:
 Marked models are listed under `model_health` in `GET /optmod/status`. Swapped decisions log
 `decision_reason` starting `escalated_tier from=… to=…`.
 
+## Dashboard cost baseline
+
+The "saved vs always-<model>" figure in the models pane compares actual cost with running every token on
+`dashboard.baseline_model` (default: `primary_model`). `GET /optmod/status` returns the resolved name as
+`baseline_model`; an unknown ID logs a warning and falls back to the primary. Savings can be negative.
+
 ## Mutators
 
 Post-routing context transforms. `BaseContextMutator.mutate(messages, decision) → new list` — never raise, never modify in-place.

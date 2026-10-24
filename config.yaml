@@ -87,6 +87,11 @@ log_path: routing.log.jsonl
 escalation:
   max_escalations: 2
 
+# Dashboard: the "saved vs always-<model>" figure compares actual cost to running every
+# token on this model. Default (omit or null) = primary_model.
+dashboard:
+  baseline_model: null
+
 # A model that fails is skipped (swapped for the next tier up) for a TTL by error type.
 # Seconds; 0 disables marking for that error. bad_request is never marked.
 model_health:

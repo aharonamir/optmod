@@ -190,3 +190,9 @@ def test_auth_error_escalates_to_another_model(client):
     })
     assert r.status_code == 200
     assert len(sent) == 2 and sent[0] != sent[1]
+
+
+def test_status_reports_dashboard_baseline_model(client):
+    """Dashboard 'saved vs always-<model>' baseline defaults to the primary model."""
+    st = client.get("/optmod/status").json()
+    assert st["baseline_model"] == st["primary"]

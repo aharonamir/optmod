@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -44,6 +45,7 @@ _tool_compressor_on:   bool               = False
 _session_pin_enabled:  bool               = True
 _session_pins:         dict[str, SessionPin] = {}
 _model_health:         ModelHealth = ModelHealth()
+_baseline_model:       str = ""
 _hard_window_s:        float              = 300.0
 _soft_window_s:        float              = 1800.0
 
@@ -53,6 +55,7 @@ async def lifespan(app: FastAPI):
     global _registry, _extractor, _router, _mutators
     global _escalation, _forwarder, _log, _config, _tool_compressor_on
     global _hard_window_s, _soft_window_s, _session_pin_enabled, _model_health
+    global _baseline_model
 
     _config     = load_config("config.yaml")
     _tool_compressor_on = bool(_config.dict().get("tool_result_compressor", False))
@@ -67,6 +70,15 @@ async def lifespan(app: FastAPI):
     _session_pins.clear()
     _model_health = ModelHealth(_config._raw.get("model_health"))
     _registry   = ModelRegistry(_config.models, _config.primary_model)
+    # Dashboard "saved vs always-<baseline>" reference; defaults to the primary model.
+    _baseline_model = _registry.primary.name
+    want = (_config._raw.get("dashboard") or {}).get("baseline_model")
+    if want:
+        try:
+            _baseline_model = _registry.get(want).name
+        except KeyError:
+            logging.warning("[optmod] dashboard.baseline_model %r not in the model pool; "
+                            "using primary %s", want, _baseline_model)
     _extractor  = FeatureExtractor()
     _router     = build_router(_config.router, _config.dict())
     _mutators   = {
@@ -393,6 +405,7 @@ async def status() -> JSONResponse:
     return JSONResponse(content={
         "router":              _router.name,
         "primary":             _registry.primary.name,
+        "baseline_model":      _baseline_model,
         "tool_compressor":     _tool_compressor_on,
         "session_pin_enabled": _session_pin_enabled,
         "active_pins":         active_pins,
