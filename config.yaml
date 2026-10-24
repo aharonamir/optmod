@@ -87,6 +87,17 @@ log_path: routing.log.jsonl
 escalation:
   max_escalations: 2
 
+# A model that fails is skipped (swapped for the next tier up) for a TTL by error type.
+# Seconds; 0 disables marking for that error. bad_request is never marked.
+model_health:
+  enabled: true
+  ttl_s:
+    not_found: 3600     # 404 — slug gone / unavailable
+    server: 120         # 5xx and other upstream errors
+    timeout: 120
+    rate_limit: 30
+    auth: 600           # 401/403 — one model's key/access rejected; escalates to the next tier
+
 # ── Active model set (when model_set: curated) ───────────────────────────────
 # IDs must match perfrouter/models.yaml `id` field exactly.
 curated_models:

@@ -93,8 +93,8 @@ def test_all_models_fail_returns_502(client):
 
 
 @respx.mock
-def test_auth_error_no_escalation(client):
-    """401 is non-retryable → 502 immediately, no escalation."""
+def test_auth_error_all_models_fail_returns_502(client):
+    """401 on every model → escalates, then 502."""
     for p in _PROVIDERS:
         respx.post(f"{p}/chat/completions").mock(
             return_value=httpx.Response(401)
@@ -104,3 +104,89 @@ def test_auth_error_no_escalation(client):
         "messages": [{"role": "user", "content": "test"}],
     })
     assert r.status_code == 502
+
+
+@respx.mock
+def test_retry_never_resends_to_failed_model(client):
+    """A retryable failure must move to a different model, even if the router
+    would pick the same one again (e.g. the cheapest-model fallback)."""
+    import json
+
+    sent: list[str] = []
+
+    def respond(request):
+        sent.append(json.loads(request.content)["model"])
+        if len(sent) == 1:
+            return httpx.Response(404, json={"error": {"message": "gone"}})
+        return httpx.Response(200, json=OK_RESPONSE)
+
+    for p in _PROVIDERS:
+        respx.post(f"{p}/chat/completions").mock(side_effect=respond)
+
+    r = client.post("/v1/chat/completions", json={
+        "model": "optmod",
+        "messages": [{"role": "user", "content": "retry-distinct-model probe, unique text 7f3a"}],
+    })
+    assert r.status_code == 200
+    assert len(sent) == 2
+    assert sent[0] != sent[1]
+
+
+@respx.mock
+def test_failed_model_is_reported_unhealthy_and_status_lists_it(client):
+    """A 404 marks the model in /optmod/status so later requests skip it."""
+    import json
+
+    sent: list[str] = []
+
+    def respond(request):
+        sent.append(json.loads(request.content)["model"])
+        if len(sent) == 1:
+            return httpx.Response(404, json={"error": {"message": "gone"}})
+        return httpx.Response(200, json=OK_RESPONSE)
+
+    for p in _PROVIDERS:
+        respx.post(f"{p}/chat/completions").mock(side_effect=respond)
+
+    r = client.post("/v1/chat/completions", json={
+        "model": "optmod",
+        "messages": [{"role": "user", "content": "health-mark probe, unique text 91bc"}],
+    })
+    assert r.status_code == 200
+    health = client.get("/optmod/status").json()["model_health"]
+    assert any(v["error_type"] == "not_found" and v["remaining_s"] > 3000
+               for v in health.values())
+
+    # A similar request routes to the same model; it must be swapped out, not retried.
+    failed_model = sent[0]
+    sent.clear()
+    r = client.post("/v1/chat/completions", json={
+        "model": "optmod",
+        "messages": [{"role": "user", "content": "health-mark probe, unique text 91bd"}],
+    })
+    assert r.status_code == 200
+    assert failed_model not in sent
+
+
+@respx.mock
+def test_auth_error_escalates_to_another_model(client):
+    """A 401 from one model is per-model: the next attempt goes elsewhere and succeeds."""
+    import json
+
+    sent: list[str] = []
+
+    def respond(request):
+        sent.append(json.loads(request.content)["model"])
+        if len(sent) == 1:
+            return httpx.Response(401, json={"error": {"message": "bad key"}})
+        return httpx.Response(200, json=OK_RESPONSE)
+
+    for p in _PROVIDERS:
+        respx.post(f"{p}/chat/completions").mock(side_effect=respond)
+
+    r = client.post("/v1/chat/completions", json={
+        "model": "optmod",
+        "messages": [{"role": "user", "content": "auth-escalation probe, unique text c40e"}],
+    })
+    assert r.status_code == 200
+    assert len(sent) == 2 and sent[0] != sent[1]

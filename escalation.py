@@ -9,11 +9,11 @@ class EscalationPolicy:
     max_escalations: int = 2
 
     retryable: set[str] = field(default_factory=lambda: {
-        "rate_limit", "server", "timeout"
+        "rate_limit", "server", "timeout", "not_found", "auth"
     })
 
     non_retryable: set[str] = field(default_factory=lambda: {
-        "auth", "bad_request"
+        "bad_request"
     })
 
     def should_escalate(

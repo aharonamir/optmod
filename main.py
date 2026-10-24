@@ -17,6 +17,7 @@ from optmod.routing import BaseRouter, build_router
 from optmod.mutators import BaseContextMutator
 from optmod.mutators.noop import NoopMutator
 from optmod.mutators.thinking_mode import ThinkingModeMutator
+from optmod.model_health import ModelHealth
 from optmod.mutators.tool_result_compressor import ToolResultCompressorMutator
 from optmod.escalation import EscalationPolicy
 from optmod.forwarder import ModelForwarder
@@ -42,6 +43,7 @@ _config:               Config              | None = None
 _tool_compressor_on:   bool               = False
 _session_pin_enabled:  bool               = True
 _session_pins:         dict[str, SessionPin] = {}
+_model_health:         ModelHealth = ModelHealth()
 _hard_window_s:        float              = 300.0
 _soft_window_s:        float              = 1800.0
 
@@ -50,7 +52,7 @@ _soft_window_s:        float              = 1800.0
 async def lifespan(app: FastAPI):
     global _registry, _extractor, _router, _mutators
     global _escalation, _forwarder, _log, _config, _tool_compressor_on
-    global _hard_window_s, _soft_window_s, _session_pin_enabled
+    global _hard_window_s, _soft_window_s, _session_pin_enabled, _model_health
 
     _config     = load_config("config.yaml")
     _tool_compressor_on = bool(_config.dict().get("tool_result_compressor", False))
@@ -63,6 +65,7 @@ async def lifespan(app: FastAPI):
     )
     _session_pin_enabled = bool(_config.dict().get("session_pin_enabled", True))
     _session_pins.clear()
+    _model_health = ModelHealth(_config._raw.get("model_health"))
     _registry   = ModelRegistry(_config.models, _config.primary_model)
     _extractor  = FeatureExtractor()
     _router     = build_router(_config.router, _config.dict())
@@ -222,6 +225,42 @@ def _try_hard_pin(
     ), "hard"
 
 
+def _avoid_failed(decision: RoutingDecision, ctx: RoutingContext) -> RoutingDecision:
+    """Swap the router's pick for a higher-tier model when that pick is unusable.
+
+    Unusable = already failed in this request, or marked bad by ModelHealth
+    (recent failure still inside its TTL). Routers re-score from scratch and can
+    keep choosing the same dead model (e.g. the cheapest-model fallback), so this
+    runs after routing. Picks the cheapest healthy, untried model in the nearest
+    higher tier; keeps the router's pick when none exists or an image request
+    would land on a non-vision model.
+    """
+    cur = decision.model
+    if cur.name not in ctx.models_tried and not _model_health.is_bad(cur.name):
+        return decision
+    has_images = _request_has_images(ctx.request)
+    candidates = sorted(
+        (m for m in _registry.all()
+         if m.tier > cur.tier
+         and m.name not in ctx.models_tried
+         and not _model_health.is_bad(m.name)
+         and (m.supports_vision or not has_images)),
+        key=lambda m: (m.tier, m.cost_per_1k),
+    )
+    if not candidates:
+        return decision
+    nxt = candidates[0]
+    why = "failed this request" if cur.name in ctx.models_tried else "marked unhealthy"
+    return RoutingDecision(
+        model=       nxt,
+        mutator=     "thinking_mode" if nxt.thinking_mode else "noop",
+        reason=      f"escalated_tier from={cur.name} to={nxt.name} ({why})",
+        confidence=  decision.confidence,
+        router_name= decision.router_name,
+        meta=        decision.meta,
+    )
+
+
 @app.post("/v1/chat/completions")
 async def chat_completions(raw: Request) -> JSONResponse:
     body     = await raw.json()
@@ -264,7 +303,7 @@ async def chat_completions(raw: Request) -> JSONResponse:
         if attempt == 0 and pinned_decision is not None:
             decision = pinned_decision
         else:
-            decision = _router.route(ctx)
+            decision = _avoid_failed(_router.route(ctx), ctx)
         mutator  = _mutators.get(decision.mutator, _mutators["noop"])
         msgs     = mutator.mutate(req.messages, decision)
         if _tool_compressor_on:
@@ -274,7 +313,9 @@ async def chat_completions(raw: Request) -> JSONResponse:
         ctx.models_tried.append(decision.model.name)
 
         if error_type is None:
+            _model_health.mark_success(decision.model.name)
             break
+        _model_health.mark_failure(decision.model.name, error_type)
 
         # Pinned-model failure → drop the pin and let the next attempt route freely
         if attempt == 0 and pinned_decision is not None:
@@ -352,6 +393,7 @@ async def status() -> JSONResponse:
         "active_pins":         active_pins,
         "hard_window_s":       _hard_window_s,
         "soft_window_s":       _soft_window_s,
+        "model_health":        _model_health.snapshot(),
         "laya": (
             _router.laya_status() if hasattr(_router, "laya_status") else {"mode": "off"}
         ),

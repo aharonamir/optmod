@@ -119,6 +119,24 @@ Each `LogEntry` carries `pr_task_type`, `pr_routing_mode`, `pr_top_similarity`, 
 `laya_cached` (served from the memo, so `laya_ms` ≈ 0 — ignore it for latency analysis), `laya_applied`, `laya_shadow_model`, `effective_delta`, `effective_cost_cap` — copied from
 `RoutingDecision.meta`. Hard-pinned turns log defaults. Query text is never logged.
 
+## Model Health (failed-model TTL)
+
+A model that fails is skipped for a TTL by error type (`model_health.py`, in-memory, wiped on restart).
+After each routing decision `_avoid_failed()` in `main.py` swaps the router's pick for the cheapest healthy,
+untried model in the nearest higher tier when the pick failed earlier in this request or is still marked
+bad. `perf_router` itself is unaware (it keeps proposing the dead model), so the swap happens after routing.
+
+```yaml
+model_health:
+  enabled: true
+  ttl_s: { not_found: 3600, server: 120, timeout: 120, rate_limit: 30, auth: 600 }   # 0 = never mark that error
+```
+
+`bad_request` (400) is never marked and never escalates. `auth` (401/403) escalates and marks the model for
+`ttl_s.auth`, since a rejected key/access is usually per model. A 404 is error type `not_found` (retryable).
+Marked models are listed under `model_health` in `GET /optmod/status`. Swapped decisions log
+`decision_reason` starting `escalated_tier from=… to=…`.
+
 ## Mutators
 
 Post-routing context transforms. `BaseContextMutator.mutate(messages, decision) → new list` — never raise, never modify in-place.
@@ -144,6 +162,7 @@ features.py                          FeatureExtractor — <1ms regex classifier,
 forwarder.py                         httpx async forwarder, one AsyncClient per base_url; defensive
                                      cached_tokens extraction into usage._optmod_cached_tokens
 escalation.py                        EscalationPolicy
+model_health.py                      ModelHealth — per-model failure TTL (not_found/server/timeout/rate_limit)
 log.py                               RoutingLog — append-only JSONL, threading.Lock
 stats.py                             /api/stats aggregation incl. cache_hit_rate, cached_tokens
                                      totals; _TIER_MAP loaded from config.yaml at import
@@ -171,6 +190,7 @@ tests/test_features.py               Unit tests — FeatureExtractor
 tests/test_escalation.py             Unit tests — EscalationPolicy
 tests/test_session_pin.py            Unit tests — pin helpers, escapes, rehoming, cache extraction
 tests/test_tool_result_compressor.py Unit tests — every compression filter and edge case
+tests/test_model_health.py           Unit tests — ModelHealth TTLs
 tests/test_laya_tier.py              Unit tests — Laya classifier, resolve_tier_params, router + log plumbing
 tests/test_live_e2e.py               Live tests hitting real providers — skipped if no API key
 ```
@@ -193,7 +213,7 @@ tests/test_live_e2e.py               Live tests hitting real providers — skipp
 uv run pytest tests/test_proxy_e2e.py tests/test_routers.py \
               tests/test_features.py tests/test_escalation.py \
               tests/test_session_pin.py tests/test_tool_result_compressor.py \
-              tests/test_laya_tier.py -v
+              tests/test_laya_tier.py tests/test_model_health.py -v
 
 # Live e2e (requires OPENROUTER_API_KEY + DEEPSEEK_API_KEY in .env)
 uv run pytest tests/test_live_e2e.py -v -s

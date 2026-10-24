@@ -67,7 +67,8 @@ class ModelForwarder:
             return {}, "server"
 
     def _classify(self, status: int) -> str:
-        mapping = {429: "rate_limit", 401: "auth", 403: "auth", 400: "bad_request"}
+        mapping = {429: "rate_limit", 401: "auth", 403: "auth", 400: "bad_request",
+                   404: "not_found"}
         return mapping.get(status, "server")
 
     async def close(self) -> None:

@@ -15,9 +15,15 @@ def test_escalate_on_rate_limit(registry):
     assert policy.should_escalate("rate_limit", 0, ctx) is True
 
 
-def test_no_escalate_auth(registry):
+def test_escalate_auth(registry):
+    """401/403 is per-model (provider key or model access): try the next tier."""
     ctx = _ctx(registry, tried=["qwen2.5:7b"], error="auth")
-    assert policy.should_escalate("auth", 0, ctx) is False
+    assert policy.should_escalate("auth", 0, ctx) is True
+
+
+def test_no_escalate_bad_request(registry):
+    ctx = _ctx(registry, tried=["qwen2.5:7b"], error="bad_request")
+    assert policy.should_escalate("bad_request", 0, ctx) is False
 
 
 def test_no_escalate_max_attempts(registry):
