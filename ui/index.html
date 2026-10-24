@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>optmod · routing dashboard</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -1195,7 +1196,13 @@ function renderModelDist(d) {
   const modelTokens = d.model_tokens       || {};
   const total       = Object.values(models).reduce((a, b) => a + b, 0) || 1;
   const sorted      = Object.entries(models).sort((a, b) => b[1] - a[1]);
-  if (!sorted.length) return;
+  if (!sorted.length) {
+    // e.g. after CLEAR LOG: reset the pane instead of leaving the previous state
+    tabMeta.models = '—';
+    if (activeTab === 'models') document.getElementById('analyticsMeta').textContent = '—';
+    document.getElementById('modelDist').innerHTML = `<div class="empty"><div class="empty-icon">⬡</div>no data yet</div>`;
+    return;
+  }
 
   const metaText = `${sorted.length} model${sorted.length !== 1 ? 's' : ''}`;
   tabMeta.models = metaText;
@@ -1261,7 +1268,12 @@ function renderTaskDist(d) {
   const tasks  = d.task_distribution || {};
   const total  = Object.values(tasks).reduce((a, b) => a + b, 0) || 1;
   const sorted = Object.entries(tasks).sort((a, b) => b[1] - a[1]);
-  if (!sorted.length) return;
+  if (!sorted.length) {
+    tabMeta.tasks = '—';
+    if (activeTab === 'tasks') document.getElementById('analyticsMeta').textContent = '—';
+    document.getElementById('taskDist').innerHTML = `<div class="empty"><div class="empty-icon">⬡</div>no data yet</div>`;
+    return;
+  }
 
   const metaText = `${sorted.length} type${sorted.length !== 1 ? 's' : ''}`;
   tabMeta.tasks = metaText;

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#080C14"/>
+  <rect x="2" y="2" width="60" height="60" rx="12" fill="none" stroke="#1E2B47" stroke-width="2"/>
+  <text x="32" y="43" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+        font-size="30" font-weight="800" letter-spacing="-1">
+    <tspan fill="#00C2D4">o</tspan><tspan fill="#9B6DFF">m</tspan>
+  </text>
+</svg>

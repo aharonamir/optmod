@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Generator
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from optmod.config import load_config, Config
@@ -87,6 +87,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="optmod", lifespan=lifespan)
 app.include_router(stats_router)
 app.mount("/ui", StaticFiles(directory="ui", html=True), name="ui")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> FileResponse:
+    return FileResponse("ui/favicon.svg", media_type="image/svg+xml")
 
 
 def _derive_session_id(req: OpenAIChatRequest) -> str:
