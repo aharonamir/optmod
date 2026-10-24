@@ -665,6 +665,15 @@
     cursor: default;
   }
 
+  .laya-chip {
+    display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 3px;
+    font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    border: 1px solid var(--border); color: var(--muted);
+  }
+  .laya-easy   { background: rgba(34,212,122,0.12);  color: var(--green);  border-color: rgba(34,212,122,0.3); }
+  .laya-medium { background: rgba(245,166,35,0.12);  color: var(--amber);  border-color: rgba(245,166,35,0.3); }
+  .laya-hard   { background: rgba(240,82,82,0.12);   color: var(--red);    border-color: rgba(240,82,82,0.3); }
+
   .ts-cell      { color: var(--muted); font-size: 11px; white-space: nowrap; }
   .latency-cell { color: var(--teal); font-weight: 600; white-space: nowrap; }
 
@@ -1381,6 +1390,22 @@ function renderTable(d) {
     const reasonSafe  = reason.replace(/"/g, "'");
     const reasonShort = reason.length > 58 ? reason.slice(0, 58) + '…' : reason;
 
+    // Laya difficulty tier: chip = tier + confidence; ● applied to routing, ○ observed only
+    let layaChip = '', layaTip = '';
+    const lStatus = r.laya_status || '';
+    if (r.laya_tier) {
+      const lc = r.laya_confidence != null ? Math.round(r.laya_confidence * 100) + '%' : '';
+      layaChip = `<span class="laya-chip laya-${r.laya_tier}">${r.laya_tier} ${lc} ${r.laya_applied ? '●' : '○'}</span>`;
+      layaTip = `laya: ${r.laya_tier} (${lc}), ${r.laya_applied ? 'applied' : 'not applied (' + (lStatus || 'shadow') + ')'}`
+        + `, delta=${r.effective_delta ?? '-'}, cap=${r.effective_cost_cap ?? '-'}`
+        + (r.laya_shadow_model ? `, shadow pick=${r.laya_shadow_model}` : '')
+        + (r.laya_cached ? ', cached' : '') + ' | ';
+    } else if (lStatus && lStatus !== 'off') {
+      layaChip = `<span class="laya-chip">laya ${lStatus}</span>`;
+      layaTip = `laya: ${lStatus} | `;
+    }
+    const reasonTip = (layaTip + reasonSafe).replace(/"/g, "'");
+
     return `
       <tr${isNew ? ' class="row-new"' : ''}>
         <td class="ts-cell">${fmtTs(r.ts)}</td>
@@ -1390,7 +1415,7 @@ function renderTable(d) {
         <td>${costHtml}</td>
         <td class="latency-cell">${fmtMs(r.latency_ms)}</td>
         <td><span class="badge ${statusClass}">${r.ok ? 'OK' : r.error_type || 'ERR'}</span></td>
-        <td class="reason-cell" title="${reasonSafe}">${reasonShort}</td>
+        <td class="reason-cell" title="${reasonTip}">${layaChip}${reasonShort}</td>
         <td>
           <div class="confidence-bar">
             <div class="conf-track"><div class="conf-fill" style="width:${conf}%"></div></div>
