@@ -420,6 +420,12 @@
       color: var(--text);
       font-size: 15px;
     }
+
+    /* ── UPDATES (Oct 2026) ── */
+    .flow-box > div { white-space: pre; }
+    .updated { margin-top: 16px; color: var(--muted); font-size: 13px; }
+    @media (max-width: 640px) { .rules-table, .endpoints-table { display: block; overflow-x: auto; } }
+    .card-title .tag, h2 .tag { margin-left: 6px; vertical-align: middle; }
   </style>
 </head>
 <body>
@@ -436,12 +442,13 @@
     <span class="pill">Python 3.11+</span>
     <span class="pill">FastAPI</span>
     <span class="pill">httpx async</span>
-    <span class="pill">OpenRouter</span>
+    <span class="pill">DeepSeek + OpenRouter</span>
+    <span class="pill">PerfRouter (XGBoost)</span>
     <span class="pill">sentence-transformers</span>
-    <span class="pill">PyTorch</span>
-    <span class="pill">scikit-learn</span>
+    <span class="pill">Laya</span>
     <span class="pill">uv</span>
   </div>
+  <p class="updated">Status as of 24 October 2026</p>
 </header>
 
 <!-- ── MAIN ───────────────────────────────────────────────── -->
@@ -456,9 +463,9 @@
         Every LLM call has a cost — in latency, money, or both.
         Most agentic frameworks pick one model and use it for everything.
         <strong>optmod</strong> sits between your agent and the models,
-        classifying each request in under 1ms and routing it to the cheapest
-        model that can actually handle it — escalating transparently on failure,
-        all within a single HTTP call the agent never sees.
+        predicting which model will handle each request well and routing it to the
+        cheapest one that qualifies, in a few milliseconds and with no LLM call —
+        escalating transparently on failure, all within a single HTTP call the agent never sees.
       </p>
     </div>
 
@@ -485,89 +492,173 @@
     <h2><span class="icon">⚡</span> How a request flows</h2>
 
     <div class="flow-box">
-      <div><span class="flow-step">Agent</span>  <span class="flow-arrow">─── POST /v1/chat/completions ──▶</span>  <span class="flow-label">optmod :8765</span></div>
-      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│</div>
-      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── <span class="flow-label">1. Parse</span>  <span class="flow-note">Pydantic validation</span></div>
-      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── <span class="flow-label">2. Extract features</span>  <span class="flow-note">&lt;1ms, regex only</span></div>
-      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── <span class="flow-label">3. Route</span>  <span class="flow-note">pick model + mutator</span></div>
-      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── <span class="flow-label">4. Mutate context</span>  <span class="flow-note">e.g. prepend /think</span></div>
-      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── <span class="flow-label">5. Forward</span>  <span class="flow-note">httpx async, one client per base_url</span></div>
-      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── on error → escalate to next tier (up to 2×)</div>
-      <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── <span class="flow-label">6. Log + return</span>  <span class="flow-note">one JSONL line, one response</span></div>
+      <div><span class="flow-step">Agent</span> <span class="flow-arrow">──▶</span> <span class="flow-label">optmod :8765</span>  <span class="flow-note">POST /v1/chat/completions</span></div>
+      <div>          │</div>
+      <div>          ├── <span class="flow-label">1. Parse</span>              <span class="flow-note">Pydantic validation</span></div>
+      <div>          ├── <span class="flow-label">2. Extract features</span>   <span class="flow-note">&lt;1ms, regex only</span></div>
+      <div>          ├── <span class="flow-label">3. Session pin</span>        <span class="flow-note">hard pin (0–300 s) reuses the last model, skips the router</span></div>
+      <div>          ├── <span class="flow-label">4. Route</span>              <span class="flow-note">perf_router: task type → XGBoost quality → model</span></div>
+      <div>          │     └── <span class="flow-note">Laya difficulty tier sets δ and the cost cap for this request</span></div>
+      <div>          ├── <span class="flow-label">5. Mutate context</span>     <span class="flow-note">/think prefix, tool-output compression</span></div>
+      <div>          ├── <span class="flow-label">6. Forward</span>            <span class="flow-note">httpx async, one client per base_url</span></div>
+      <div>          │     └── <span class="flow-note">on error → escalate to the next tier (at most 2 escalations)</span></div>
+      <div>          └── <span class="flow-label">7. Log + return</span>       <span class="flow-note">one JSONL line, one response</span></div>
     </div>
 
     <h3>Escalation path</h3>
     <div class="escalation-path">
-      <div class="esc-node fast">fast · gpt-oss-120b</div>
+      <div class="esc-node fast">fast · 1 model</div>
       <span class="esc-arrow">→</span>
-      <div class="esc-node reasoning">reasoning · trinity-large-thinking</div>
+      <div class="esc-node reasoning">reasoning · 6 models</div>
       <span class="esc-arrow">→</span>
-      <div class="esc-node oracle">oracle · deepseek-v4-flash</div>
+      <div class="esc-node oracle">oracle · 3 models</div>
       <span class="esc-arrow">→</span>
       <div class="esc-node fail">502</div>
     </div>
     <p>
       Non-retryable errors (auth, bad request) short-circuit immediately.
-      Retryable errors (rate limit, server error, timeout) trigger escalation to the next tier.
+      Retryable errors (rate limit, server error, timeout) trigger escalation to the next tier,
+      at most twice per request (<code>escalation.max_escalations: 2</code>).
     </p>
   </section>
 
   <hr class="divider" />
 
-  <!-- MODEL TIERS -->
+  <!-- MODEL POOL -->
   <section>
-    <h2><span class="icon">🏆</span> Model tiers</h2>
+    <h2><span class="icon">🏆</span> Model pool</h2>
+
+    <p>
+      optmod no longer keeps its own copy of the model list. At startup it reads PerfRouter's
+      <code>models.yaml</code> (84 models today) and joins it with the <code>providers</code> block
+      in <code>config.yaml</code>. With <code>perf_router.model_set: curated</code> it uses the
+      10 models below; with <code>full</code> it uses the whole PerfRouter pool.
+      Six providers are configured: DeepSeek (direct), OpenRouter, Google, Anthropic, OpenAI and Moonshot.
+    </p>
+    <p>
+      Tiers are assigned automatically from PerfRouter's price data: free models are <strong>fast</strong>,
+      a blended price under $0.50 per 1M tokens is <strong>reasoning</strong>, everything else is
+      <strong>oracle</strong>. A <code>tier</code> key in <code>model_overrides</code> overrides this for one model.
+      Prices below are blended (3 parts input to 1 part output), per 1M tokens.
+    </p>
 
     <div class="tier-grid">
       <div class="tier-card fast">
         <span class="tier-badge">Tier 0</span>
         <div class="tier-name">Fast</div>
-        <div class="tier-model">openai/gpt-oss-120b:free</div>
+        <div class="tier-model">nvidia/nemotron-3-super-120b-a12b:free</div>
         <div class="tier-detail">
           <span>Provider: OpenRouter</span>
-          <span>Context: 128 000 tokens</span>
           <span>Cost: $0.00 (free tier)</span>
-          <span>Use: extract, summarize, simple tasks</span>
+          <span>First stop for simple tasks</span>
         </div>
       </div>
 
       <div class="tier-card reasoning">
         <span class="tier-badge">Tier 1</span>
         <div class="tier-name">Reasoning</div>
-        <div class="tier-model">arcee-ai/trinity-large-thinking</div>
+        <div class="tier-model">deepseek/deepseek-v4-flash · primary</div>
         <div class="tier-detail">
-          <span>Provider: OpenRouter</span>
-          <span>Context: 256 000 tokens</span>
-          <span>Cost: $0.00022 / 1k tokens</span>
-          <span>Use: multi-step reasoning, tool calls, Hebrew</span>
-          <span>Thinking model — internal CoT before answer</span>
+          <span>openai/gpt-oss-120b · $0.07</span>
+          <span>google/gemini-3.1-flash-lite · $0.18</span>
+          <span>deepseek/deepseek-v4-pro · $0.26</span>
+          <span>openai/gpt-4o-mini · $0.26</span>
+          <span>tencent/hy3-preview · $0.29</span>
+          <span>deepseek/deepseek-v4-flash · $0.34</span>
         </div>
       </div>
 
       <div class="tier-card oracle">
         <span class="tier-badge">Tier 2</span>
         <div class="tier-name">Oracle</div>
-        <div class="tier-model">deepseek/deepseek-v4-flash</div>
+        <div class="tier-model">premium models</div>
         <div class="tier-detail">
-          <span>Provider: OpenRouter</span>
-          <span>Context: 256 000 tokens</span>
-          <span>Cost: $0.00014 / 1k tokens</span>
-          <span>Use: hard tasks, long context, quality ceiling</span>
+          <span>xiaomi/mimo-v2.5-pro · $0.54</span>
+          <span>moonshotai/kimi-k2.6 · $1.71</span>
+          <span>anthropic/claude-sonnet-4.6 · $6.00</span>
         </div>
       </div>
     </div>
+    <p style="margin-top:16px;">
+      Vision-capable: gemini-3.1-flash-lite, gpt-4o-mini, kimi-k2.6, claude-sonnet-4.6.
+      DeepSeek V4 Pro and Claude Sonnet 4.6 run with thinking enabled by default (<code>model_overrides</code>).
+    </p>
   </section>
 
   <hr class="divider" />
 
-  <!-- ROUTING RULES -->
+  <!-- ROUTERS -->
   <section>
-    <h2><span class="icon">🧭</span> Routing rules</h2>
+    <h2><span class="icon">🧭</span> Routers</h2>
 
     <p>
-      The <strong>RuleBasedRouter</strong> evaluates 9 deterministic rules in order — first match wins.
-      Features are extracted from the request in &lt;1ms using compiled regex patterns; no ML,
-      no file I/O, no network calls during classification.
+      Five routers sit behind one <code>BaseRouter</code> interface and swap at runtime with
+      <code>POST /optmod/router/{name}</code> — no restart. <strong>perf_router</strong> is the default.
+      Whatever the router, the agent's endpoint never changes.
+    </p>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">perf_router <span class="tag fast">default</span></div>
+        <p>sentence-BERT matches the query to PerfRouter's task types, XGBoost predicts each model's quality,
+        and the cheapest eligible model within the quality band wins. Benchmark-driven: a new model needs a
+        YAML entry, not a benchmark run.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">rule_based</div>
+        <p>9 deterministic rules evaluated in order (table below). Fully interpretable. Safe fallback target if anything goes wrong.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">trouter</div>
+        <p>Neural network router. sentence-BERT encodes the query; a lightweight MLP scores each model weighting quality and cost. Loads <code>trouter_weights.pt</code> once at startup.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">decision_tree</div>
+        <p>scikit-learn tree trained on WildClawBench. Falls back to <code>rule_based</code> if <code>routing_policy.pkl</code> is absent.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">passthrough</div>
+        <p>Always routes to the primary model (deepseek/deepseek-v4-flash). No classification. Useful for baseline comparison.</p>
+      </div>
+    </div>
+
+    <h3>How perf_router decides</h3>
+    <table class="rules-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Step</th>
+          <th>What happens</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1</td>
+          <td>Classify</td>
+          <td>The last 3 user messages are embedded with MiniLM and matched to the top task types. Below <code>min_similarity</code> (0.20) the query is ambiguous and goes to the cheapest eligible model.</td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td>Predict</td>
+          <td>XGBoost predicts each model's quality on those task types from its benchmark feature vector.</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td>Filter</td>
+          <td>Models that fail the context window, vision or cost cap are dropped. The cap is the baseline's price × <code>cost_cap_multiplier</code> (2.0; baseline deepseek-v4-flash).</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td>Choose</td>
+          <td>With δ &gt; 0 (<code>degradation_threshold</code>, 0.15): the cheapest model within δ of the best predicted quality. With δ = 0: the highest <code>quality − α·cost</code> (α = 0.3). A soft session pin credits the previous model with its cache savings.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>rule_based: the 9 rules</h3>
+    <p>
+      Rules are evaluated in order — first match wins. Features are extracted from the request in
+      &lt;1ms using compiled regex patterns; no ML, no file I/O, no network calls during classification.
     </p>
 
     <table class="rules-table">
@@ -602,7 +693,7 @@
           <td>4</td>
           <td><code>task_type == reason</code> AND not easy</td>
           <td><span class="tag reasoning">reasoning</span> + /think</td>
-          <td>Non-trivial reasoning → Qwen3 thinking mode</td>
+          <td>Non-trivial reasoning → thinking mode</td>
         </tr>
         <tr>
           <td>5</td>
@@ -636,27 +727,161 @@
         </tr>
       </tbody>
     </table>
+  </section>
 
-    <h3>Router types</h3>
+  <hr class="divider" />
+
+  <!-- LAYA -->
+  <section>
+    <h2><span class="icon">🎚</span> Laya difficulty tier <span class="tag reasoning">new</span></h2>
+
+    <div class="motivation-box">
+      <p>
+        PerfRouter ranks models per task type, so a trivial question and a hard one of the same type
+        get the same ranking, and one static quality band (δ) and cost cap apply to both.
+        <strong>Laya</strong> — a small local decision model that answers a typed question in one forward pass,
+        with no generation — labels each routed query <strong>easy</strong>, <strong>medium</strong> or
+        <strong>hard</strong>, and the tier sets δ and the cost cap for that one request.
+        Easy queries accept a wider band and land on cheaper models; hard queries get a narrow band and a higher cap.
+      </p>
+    </div>
+
+    <table class="rules-table">
+      <thead>
+        <tr>
+          <th>Tier</th>
+          <th>δ (quality band)</th>
+          <th>Cost cap</th>
+          <th>Effect</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tag fast">easy</span></td>
+          <td>0.25</td>
+          <td>2.0×</td>
+          <td>Accept any model within 25% of the best: cheaper models qualify more often</td>
+        </tr>
+        <tr>
+          <td><span class="tag reasoning">medium</span></td>
+          <td>0.15</td>
+          <td>2.0×</td>
+          <td>Same as the static default</td>
+        </tr>
+        <tr>
+          <td><span class="tag oracle">hard</span></td>
+          <td>0.03</td>
+          <td>4.0×</td>
+          <td>Stay close to the best predicted quality, and let pricier models become eligible</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      Tier values are placeholders, to be tuned from shadow data. δ must stay above 0 for every tier:
+      in PerfRouter δ = 0 switches to <code>quality − α·cost</code>, which is not "best quality".
+    </p>
+
+    <h3>Modes</h3>
     <div class="card-grid">
       <div class="card">
-        <div class="card-title">passthrough</div>
-        <p>Always routes to the primary model (deepseek/deepseek-v4-flash). No classification. Useful for baseline comparison.</p>
+        <div class="card-title">off</div>
+        <p>Identical to having no <code>laya</code> block: the static δ and cost cap apply.</p>
       </div>
       <div class="card">
-        <div class="card-title">rule_based</div>
-        <p>9 deterministic rules evaluated in order. Fully interpretable. Safe fallback target if anything goes wrong.</p>
+        <div class="card-title">shadow <span class="tag fast">current</span></div>
+        <p>Route with the static values. When the tier's values differ, a second <code>route()</code> call records the model Laya would have chosen (<code>laya_shadow_model</code>).</p>
       </div>
       <div class="card">
-        <div class="card-title">decision_tree</div>
-        <p>scikit-learn tree trained on WildClawBench. Falls back to <code>rule_based</code> if <code>routing_policy.pkl</code> is absent.</p>
-      </div>
-      <div class="card">
-        <div class="card-title">trouter</div>
-        <p>Neural network router. sentence-BERT encodes the query; a lightweight MLP scores each model weighting quality and cost (configurable α). Loads <code>trouter_weights.pt</code> once at startup.</p>
+        <div class="card-title">active</div>
+        <p>Apply the tier's δ and cost cap when Laya answers with confidence ≥ <code>min_confidence</code> (0.5). Otherwise fall back to the static values.</p>
       </div>
     </div>
-    <p style="margin-top:12px;">Routers swap at runtime with a single POST — no restart required.</p>
+
+    <h3>Guardrails</h3>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">Bounded latency</div>
+        <p>80 ms timeout per call; 3 consecutive errors, timeouts or slow calls open a circuit breaker for 60 s; a 512-entry memo serves repeated queries.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Fails soft</div>
+        <p>Laya is an optional extra (<code>uv pip install -e '.[laya]'</code>). A missing package or failed load reports <code>unavailable</code>; it never raises.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Observe-only when ambiguous</div>
+        <p>Below MiniLM's <code>min_similarity</code> the query goes to the cheapest model as before; the tier is logged but not applied.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Measured</div>
+        <p>Each log line carries <code>laya_tier</code>, <code>laya_confidence</code>, <code>laya_ms</code>, <code>laya_applied</code>, <code>laya_shadow_model</code>, <code>effective_delta</code>, <code>effective_cost_cap</code>. Query text is never logged.</p>
+      </div>
+    </div>
+
+    <h3>Status</h3>
+    <p>
+      <strong>Done:</strong> phase 1 (embedded backend — Laya runs inside the optmod process) and phase 1b
+      (low-similarity queries classified, observe-only). <strong>Not started:</strong> phase 2, a <code>remote</code>
+      backend calling <code>laya-serve</code> over HTTP; phase 3, routing confidently-hard low-similarity queries to a
+      configured model instead of the cheapest. Switch modes at runtime with
+      <code>POST /optmod/laya/{off|shadow|active}</code>. Plan: <code>optmod-spec/plans/laya-difficulty-tier.md</code>.
+    </p>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- SESSION PINNING -->
+  <section>
+    <h2><span class="icon">📌</span> Session pinning</h2>
+
+    <p>
+      Multi-turn conversations stick to the same model while the provider's prompt cache is still warm,
+      so later turns keep cached-read pricing instead of paying full input cost.
+      A session is identified by the SHA1 of the first user message.
+    </p>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">Hard pin · 0–300 s</div>
+        <p>Bypass the router entirely and reuse the previous model.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Soft bonus · 300–1800 s</div>
+        <p>perf_router scores normally, but the previous model is credited with its observed cache savings.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Fresh · over 1800 s</div>
+        <p>The pin is dropped and routing starts from scratch.</p>
+      </div>
+    </div>
+    <p style="margin-top:16px;">
+      The pin is always overridden when the pinned model errors or is rate-limited, when the request has images and the
+      pinned model has no vision, when the model was removed from the registry, or when the conversation outgrows its
+      context window (then it moves to the closest larger-context model). Pin state is in memory only and clears on restart.
+      Each log line records the outcome in <code>pin_state</code>. Pinning can be switched off at runtime with
+      <code>POST /optmod/session-pin/off</code>.
+    </p>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- MUTATORS -->
+  <section>
+    <h2><span class="icon">✂️</span> Context mutators</h2>
+    <p>Post-routing transforms of the message list. Mutators always return a new list and never raise.</p>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">noop</div>
+        <p>Identity passthrough.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">thinking_mode</div>
+        <p>Prepends <code>/think</code> to trigger chain-of-thought. Selected automatically for models marked <code>thinking_mode</code>.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">tool_result_compressor</div>
+        <p>RTK-style compression of tool outputs: git diff and status, grep, ls and tree, build and test output, log de-duplication, smart truncation. Saves tokens on top of routing. Off by default; toggle with <code>POST /optmod/compressor/{on|off}</code>.</p>
+      </div>
+    </div>
   </section>
 
   <hr class="divider" />
@@ -671,16 +896,16 @@
     </p>
 
     <div class="file-tree">
-      <div><span class="ft-file">main.py</span>         <span class="ft-note">── FastAPI app, lifespan, /v1/chat/completions</span></div>
-      <div><span class="ft-file">schemas.py</span>      <span class="ft-note">── Pydantic + dataclass types</span></div>
-      <div><span class="ft-file">config.py</span>       <span class="ft-note">── Config loader (config.yaml)</span></div>
-      <div><span class="ft-file">config.yaml</span>     <span class="ft-note">── Model pool + router config</span></div>
-      <div><span class="ft-file">registry.py</span>     <span class="ft-note">── ModelConfig + ModelRegistry</span></div>
+      <div><span class="ft-file">main.py</span>         <span class="ft-note">── FastAPI app, lifespan, endpoints, session-pin gate</span></div>
+      <div><span class="ft-file">schemas.py</span>      <span class="ft-note">── Pydantic + dataclass types (RoutingDecision, LogEntry, SessionPin)</span></div>
+      <div><span class="ft-file">config.py</span>       <span class="ft-note">── Config loader (config.yaml + env vars)</span></div>
+      <div><span class="ft-file">config.yaml</span>     <span class="ft-note">── Providers, curated models, router, perf_router + Laya knobs, session pin</span></div>
+      <div><span class="ft-file">registry.py</span>     <span class="ft-note">── ModelConfig + ModelRegistry, built from PerfRouter's models.yaml</span></div>
       <div><span class="ft-file">features.py</span>     <span class="ft-note">── FeatureExtractor (&lt;1ms regex classifier)</span></div>
       <div><span class="ft-file">forwarder.py</span>    <span class="ft-note">── Async httpx forwarder, one client per base_url</span></div>
       <div><span class="ft-file">escalation.py</span>   <span class="ft-note">── EscalationPolicy</span></div>
       <div><span class="ft-file">log.py</span>          <span class="ft-note">── Append-only JSONL log (threading.Lock)</span></div>
-      <div><span class="ft-file">stats.py</span>        <span class="ft-note">── /api/stats aggregation</span></div>
+      <div><span class="ft-file">stats.py</span>        <span class="ft-note">── /api/stats aggregation, cache-hit rate</span></div>
       <div>&nbsp;</div>
       <div><span class="ft-dir">routing/</span></div>
       <div>&nbsp;&nbsp;<span class="ft-file">__init__.py</span>       <span class="ft-note">── BaseRouter ABC + build_router() factory</span></div>
@@ -688,20 +913,25 @@
       <div>&nbsp;&nbsp;<span class="ft-file">passthrough.py</span>    <span class="ft-note">── PassthroughRouter</span></div>
       <div>&nbsp;&nbsp;<span class="ft-file">rule_based.py</span>     <span class="ft-note">── RuleBasedRouter (9 rules)</span></div>
       <div>&nbsp;&nbsp;<span class="ft-file">decision_tree.py</span>  <span class="ft-note">── DecisionTreeRouter (scikit-learn)</span></div>
-      <div>&nbsp;&nbsp;<span class="ft-file">trouter/router.py</span> <span class="ft-note">── TRouterRouter (neural net, sentence-BERT)</span></div>
-      <div>&nbsp;&nbsp;<span class="ft-file">trouter/train_trouter.py</span>  <span class="ft-note">── TRouter training + route() inference</span></div>
-      <div>&nbsp;&nbsp;<span class="ft-file">trouter/trouter_weights.pt</span><span class="ft-note">── Trained checkpoint (torch)</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">trouter/</span>          <span class="ft-note">── TRouter (sentence-BERT + MLP), training code, checkpoint</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">perfrouter/router.py</span>    <span class="ft-note">── PerfRouterRouter: config plumbing, pins, Laya tier</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">perfrouter/inference.py</span> <span class="ft-note">── PerfRouter inference (sentence-BERT + XGBoost)</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">perfrouter/laya_tier.py</span> <span class="ft-note">── LayaTierClassifier, breaker, memo</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">perfrouter/perf_router.pkl</span><span class="ft-note">── Trained PerfRouter checkpoint</span></div>
       <div>&nbsp;</div>
       <div><span class="ft-dir">mutators/</span></div>
       <div>&nbsp;&nbsp;<span class="ft-file">__init__.py</span>      <span class="ft-note">── BaseContextMutator ABC</span></div>
       <div>&nbsp;&nbsp;<span class="ft-file">noop.py</span>          <span class="ft-note">── NoopMutator</span></div>
-      <div>&nbsp;&nbsp;<span class="ft-file">thinking_mode.py</span> <span class="ft-note">── Prepends /think or /no_think</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">thinking_mode.py</span> <span class="ft-note">── Prepends /think</span></div>
+      <div>&nbsp;&nbsp;<span class="ft-file">tool_result_compressor.py</span> <span class="ft-note">── RTK-style tool-output compression</span></div>
       <div>&nbsp;</div>
-      <div><span class="ft-dir">tests/</span>            <span class="ft-note">── 37 tests: 31 mock (respx) + 6 live (real OpenRouter)</span></div>
+      <div><span class="ft-dir">tests/</span>            <span class="ft-note">── 147 tests: 141 mock (respx, no network) + 6 live</span></div>
       <div><span class="ft-dir">ui/</span></div>
       <div>&nbsp;&nbsp;<span class="ft-file">index.html</span>       <span class="ft-note">── Self-contained stats dashboard</span></div>
+      <div><span class="ft-dir">optmod-spec/</span>      <span class="ft-note">── Spec and feature plans (session pinning, Laya)</span></div>
+      <div><span class="ft-dir">docs/</span>             <span class="ft-note">── Project overview deck (PDF, HTML, slide images)</span></div>
       <div>&nbsp;</div>
-      <div><span class="ft-file">pyproject.toml</span>  <span class="ft-note">── Single dependency file (uv)</span></div>
+      <div><span class="ft-file">pyproject.toml</span>  <span class="ft-note">── Single dependency file (uv); extras: dev, trouter, perfrouter, laya</span></div>
       <div><span class="ft-file">routing.log.jsonl</span> <span class="ft-note">── Append-only request log</span></div>
     </div>
   </section>
@@ -729,17 +959,42 @@
         <tr>
           <td><span class="method get">GET</span></td>
           <td><code>/optmod/status</code></td>
-          <td>Router name, active model, full model list</td>
+          <td>Router, primary model, model list with costs, active pins and pin windows, compressor state, Laya status</td>
         </tr>
         <tr>
           <td><span class="method post">POST</span></td>
           <td><code>/optmod/router/{name}</code></td>
-          <td>Hot-swap router: <code>passthrough</code>, <code>rule_based</code>, <code>decision_tree</code>, <code>trouter</code></td>
+          <td>Hot-swap router: <code>perf_router</code>, <code>rule_based</code>, <code>trouter</code>, <code>decision_tree</code>, <code>passthrough</code></td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span></td>
+          <td><code>/optmod/laya/{mode}</code></td>
+          <td>Laya tier mode: <code>off</code>, <code>shadow</code>, <code>active</code> (409 unless the router is <code>perf_router</code>)</td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span></td>
+          <td><code>/optmod/compressor/{state}</code></td>
+          <td>Turn the tool-output compressor <code>on</code> or <code>off</code></td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span></td>
+          <td><code>/optmod/session-pin/{state}</code></td>
+          <td>Turn session pinning <code>on</code> or <code>off</code></td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span></td>
+          <td><code>/optmod/restart</code></td>
+          <td>Re-read the tier map from <code>config.yaml</code> and trigger a reload</td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span></td>
+          <td><code>/optmod/log/clear</code></td>
+          <td>Truncate <code>routing.log.jsonl</code></td>
         </tr>
         <tr>
           <td><span class="method get">GET</span></td>
           <td><code>/api/stats?range=N</code></td>
-          <td>Aggregated stats from JSONL log (1h, 6h, 24h, all, or last-N)</td>
+          <td>Aggregated stats from the JSONL log (1h, 6h, 24h, all, or last-N), including cache-hit rate and cached tokens</td>
         </tr>
         <tr>
           <td><span class="method get">GET</span></td>
@@ -769,7 +1024,7 @@
     <div class="card-grid">
       <div class="card">
         <div class="card-title">Stat cards</div>
-        <p>Total requests, success rate, escalation rate, error rate — with animated number updates.</p>
+        <p>Total requests, success rate, escalation rate, error rate and cache-hit rate (with cached tokens and active pinned sessions) — with animated number updates.</p>
       </div>
       <div class="card">
         <div class="card-title">Model distribution</div>
@@ -777,7 +1032,7 @@
       </div>
       <div class="card">
         <div class="card-title">Task types</div>
-        <p>Breakdown of task classifications (reason, extract, code, summarize, tool_call, …).</p>
+        <p>Breakdown of task classifications.</p>
       </div>
       <div class="card">
         <div class="card-title">Latency histogram</div>
@@ -791,13 +1046,17 @@
         <div class="card-title">Recent requests table</div>
         <p>Last 50 requests. Columns: model (short name, full name on hover), models-tried chain, per-request cost, latency, status, routing reason (truncated, hover for full text), confidence bar. New rows slide in animated. Pause/resume button freezes the table without stopping stat card updates.</p>
       </div>
+      <div class="card">
+        <div class="card-title">Controls</div>
+        <p>Router switcher, compressor toggle, session-pin toggle, clear log and reload, in the bar above the stats.</p>
+      </div>
     </div>
 
     <h3>Time range selector</h3>
     <p>
       Switch between <strong>last 50</strong>, <strong>last 200</strong>, <strong>1h</strong>, <strong>6h</strong>,
       <strong>today</strong>, and <strong>all time</strong> — stats cards and charts update instantly.
-      The active router name is shown in the top-right corner of the time bar.
+      The active router name is shown in the top-right corner.
     </p>
   </section>
 
@@ -826,11 +1085,15 @@
       </div>
       <div class="card">
         <div class="card-title">Append-only log</div>
-        <p>One JSONL line per request, written with <code>threading.Lock</code>. The file is never rewritten or truncated.</p>
+        <p>One JSONL line per request, written with <code>threading.Lock</code>. The file is never rewritten; clearing it is an explicit endpoint.</p>
       </div>
       <div class="card">
         <div class="card-title">No secrets in code</div>
-        <p>API keys are resolved from environment variables at startup (<code>api_key_env</code> in config.yaml). Never hardcoded.</p>
+        <p>API keys are resolved from environment variables at startup (<code>api_key_env</code> per provider in config.yaml). Never hardcoded.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Optional parts fail soft</div>
+        <p>PerfRouter, TRouter and Laya are optional extras. If one is missing, its router falls back silently or Laya reports <code>unavailable</code>.</p>
       </div>
     </div>
   </section>
@@ -846,22 +1109,41 @@
       <div class="stack-item"><span class="dot" style="background:#4dc3ff"></span> uvicorn</div>
       <div class="stack-item"><span class="dot" style="background:#3de8a0"></span> httpx (async)</div>
       <div class="stack-item"><span class="dot" style="background:#3de8a0"></span> Pydantic v2</div>
-      <div class="stack-item"><span class="dot" style="background:#f5c842"></span> PyTorch 2.0+</div>
+      <div class="stack-item"><span class="dot" style="background:#f5c842"></span> PerfRouter (XGBoost)</div>
       <div class="stack-item"><span class="dot" style="background:#f5c842"></span> sentence-transformers</div>
+      <div class="stack-item"><span class="dot" style="background:#f5c842"></span> PyTorch 2.0+</div>
+      <div class="stack-item"><span class="dot" style="background:#f5c842"></span> Laya (optional)</div>
       <div class="stack-item"><span class="dot" style="background:#f5c842"></span> scikit-learn</div>
       <div class="stack-item"><span class="dot" style="background:#ff6b6b"></span> PyYAML</div>
       <div class="stack-item"><span class="dot" style="background:#7c6af7"></span> uv (packaging)</div>
       <div class="stack-item"><span class="dot" style="background:#7c6af7"></span> pytest + respx</div>
+      <div class="stack-item"><span class="dot" style="background:#7b7f99"></span> DeepSeek API</div>
       <div class="stack-item"><span class="dot" style="background:#7b7f99"></span> OpenRouter API</div>
     </div>
   </section>
 
   <hr class="divider" />
 
-  <!-- PHASE 2 -->
+  <!-- NOT BUILT YET -->
   <section>
-    <h2><span class="icon">🚧</span> What's not built yet (Phase 2)</h2>
+    <h2><span class="icon">🚧</span> What's not built yet</h2>
     <div class="card-grid">
+      <div class="card">
+        <div class="card-title">Laya remote backend</div>
+        <p>Phase 2: call a <code>laya-serve</code> instance over HTTP, on localhost or any URL. Config is already in place; today <code>backend: remote</code> reports <code>unavailable</code>.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Laya hard rescue</div>
+        <p>Phase 3, gated on shadow data: send confidently-hard, low-similarity queries to a configured model instead of the cheapest.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Feedback loop CLI</div>
+        <p>Retrains TRouter, the decision tree and PerfRouter from <code>routing.log.jsonl</code> to continuously improve routing accuracy.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">File-backed session pins</div>
+        <p>Pins live in memory today and are lost on restart.</p>
+      </div>
       <div class="card">
         <div class="card-title">routing_policy.pkl</div>
         <p>Trained by running WildClawBench. Enables the <code>decision_tree</code> router without falling back to rule-based.</p>
@@ -870,10 +1152,6 @@
         <div class="card-title">Hermes plugin</div>
         <p>Thin wrapper calling <code>/optmod/*</code> control endpoints to surface router telemetry inside Hermes.</p>
       </div>
-      <div class="card">
-        <div class="card-title">Feedback loop CLI</div>
-        <p>Retrains TRouter and the decision tree from <code>routing.log.jsonl</code> to continuously improve routing accuracy.</p>
-      </div>
     </div>
   </section>
 
@@ -881,7 +1159,9 @@
 
 <footer>
   optmod &mdash; local OpenAI-compatible routing proxy &mdash;
-  <a href="https://github.com/aharonamir/optmod">github.com/aharonamir/optmod</a>
+  <a href="https://github.com/jiuwencortex/optmod">github.com/jiuwencortex/optmod</a>
+  &middot; routing models from <a href="https://github.com/jiuwencortex/perfrouter">PerfRouter</a>
+  &middot; overview deck in <a href="docs/">docs/</a>
 </footer>
 
 </body>
