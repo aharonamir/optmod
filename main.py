@@ -242,6 +242,11 @@ def _try_hard_pin(
     ), "hard"
 
 
+# features.token_count is a words*1.3 estimate; real counts for code/JSON-heavy prompts ran ~1.6x
+# higher (308k estimated vs 489k billed), so leave headroom when checking a context window.
+_TOKEN_ESTIMATE_MARGIN = 1.6
+
+
 def _avoid_failed(decision: RoutingDecision, ctx: RoutingContext) -> RoutingDecision:
     """Swap the router's pick for a higher-tier model when that pick is unusable.
 
@@ -249,8 +254,8 @@ def _avoid_failed(decision: RoutingDecision, ctx: RoutingContext) -> RoutingDeci
     (recent failure still inside its TTL). Routers re-score from scratch and can
     keep choosing the same dead model (e.g. the cheapest-model fallback), so this
     runs after routing. Picks the cheapest healthy, untried model in the nearest
-    higher tier; keeps the router's pick when none exists or an image request
-    would land on a non-vision model.
+    higher tier whose context window fits the request; keeps the router's pick
+    when none exists or an image request would land on a non-vision model.
     """
     cur = decision.model
     if cur.name not in ctx.models_tried and not _model_health.is_bad(cur.name):
@@ -261,6 +266,7 @@ def _avoid_failed(decision: RoutingDecision, ctx: RoutingContext) -> RoutingDeci
          if m.tier > cur.tier
          and m.name not in ctx.models_tried
          and not _model_health.is_bad(m.name)
+         and m.context_window >= ctx.features.token_count * _TOKEN_ESTIMATE_MARGIN
          and (m.supports_vision or not has_images)),
         key=lambda m: (m.tier, m.cost_per_1k),
     )

@@ -196,3 +196,24 @@ def test_status_reports_dashboard_baseline_model(client):
     """Dashboard 'saved vs always-<model>' baseline defaults to the primary model."""
     st = client.get("/optmod/status").json()
     assert st["baseline_model"] == st["primary"]
+
+
+def test_swap_never_picks_a_model_too_small_for_the_prompt(client):
+    """When the router's pick is marked unhealthy, the replacement must fit the context."""
+    from optmod import main as m
+    from optmod.schemas import Features, RoutingContext, RoutingDecision, OpenAIChatRequest, ChatMessage
+
+    cur = m._registry.all()[0]                       # lowest tier
+    ctx = RoutingContext(
+        request=OpenAIChatRequest(messages=[ChatMessage(role="user", content="x")]),
+        features=Features("general", "easy", 200_000, True, "en", "x"),
+        session_id="s", registry=m._registry,
+    )
+    dec = RoutingDecision(model=cur, mutator="noop", reason="r", confidence=1.0, router_name="t")
+    m._model_health.mark_failure(cur.name, "rate_limit")
+    try:
+        out = m._avoid_failed(dec, ctx)
+    finally:
+        m._model_health.clear()
+    assert out.model.name != cur.name
+    assert out.model.context_window >= 200_000 * m._TOKEN_ESTIMATE_MARGIN
