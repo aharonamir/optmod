@@ -86,6 +86,12 @@ policy_path: routing_policy.pkl
 log_path: routing.log.jsonl
 escalation:
   max_escalations: 2
+  max_cost_multiplier: null   # null = no ceiling; e.g. 5 = only targets up to 5x the primary's price/1k
+  strategy: best_quality   # best_quality = highest predicted score among models that fit; next_tier = cheapest in the tier above
+
+# context-window checks multiply the estimated prompt tokens by this (estimate undercounts big prompts);
+# refined per session from billed usage, and floored by a provider context-overflow error
+token_estimate_margin: 1.7
 
 # Dashboard: the "saved vs always-<model>" figure compares actual cost to running every
 # token on this model. Default (omit or null) = primary_model.
@@ -96,6 +102,7 @@ dashboard:
 # Seconds; 0 disables marking for that error. bad_request is never marked.
 model_health:
   enabled: true
+  max_ttl_s: 86400      # cap when the provider advertises a reset (Retry-After / X-RateLimit-Reset)
   ttl_s:
     not_found: 3600     # 404 — slug gone / unavailable
     server: 120         # 5xx and other upstream errors

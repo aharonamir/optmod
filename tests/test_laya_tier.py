@@ -278,7 +278,7 @@ def _make_router(monkeypatch, laya_cfg=None, stub=None, backend=None):
     perf_cfg = {"degradation_threshold": 0.15, "min_similarity": 0.20, "cost_cap_multiplier": 2.0}
     if laya_cfg is not None:
         perf_cfg["laya"] = laya_cfg
-    r = PerfRouterRouter({"perf_router": perf_cfg})
+    r = PerfRouterRouter({"perf_router": perf_cfg, "token_estimate_margin": 1.0})
     r._perf_router = stub or StubInference()
     r._ready = True
     return r
@@ -462,7 +462,7 @@ class _MetaRouter:
 
 
 class _OkForwarder:
-    async def forward(self, model, req, msgs):
+    async def forward(self, model, req, msgs, info=None):
         return {"choices": [{"message": {"role": "assistant", "content": "ok"}}],
                 "usage": {"prompt_tokens": 1, "completion_tokens": 1}}, None
 

@@ -56,6 +56,16 @@ class RoutingContext:
     last_error_type: str | None = None
     models_tried:    list[str] = field(default_factory=list)
     session_pin:     SessionPin | None = None
+    # Prompt-size knowledge beyond the words*1.3 estimate (features.token_count undercounts big
+    # code/JSON prompts): a per-session billed/estimated ratio learned from earlier turns, and a
+    # hard floor taken from a provider's context-overflow error ("you requested about N tokens").
+    token_margin:    float | None = None
+    token_floor:     int = 0
+
+    def needed_tokens(self, default_margin: float) -> int:
+        """Tokens a model's context window must hold for this request."""
+        est = int(self.features.token_count * (self.token_margin or default_margin))
+        return max(est, self.token_floor)
 
 
 @dataclass

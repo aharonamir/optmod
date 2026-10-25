@@ -46,6 +46,10 @@ _session_pin_enabled:  bool               = True
 _session_pins:         dict[str, SessionPin] = {}
 _model_health:         ModelHealth = ModelHealth()
 _baseline_model:       str = ""
+_token_margin:         float = 1.7
+_token_ratio:          dict[str, float] = {}   # session -> billed prompt tokens / our estimate
+_escalation_strategy:  str = "best_quality"
+_escalation_cost_mult: float | None = None   # None = no cost ceiling on escalation targets
 _hard_window_s:        float              = 300.0
 _soft_window_s:        float              = 1800.0
 
@@ -55,7 +59,7 @@ async def lifespan(app: FastAPI):
     global _registry, _extractor, _router, _mutators
     global _escalation, _forwarder, _log, _config, _tool_compressor_on
     global _hard_window_s, _soft_window_s, _session_pin_enabled, _model_health
-    global _baseline_model
+    global _baseline_model, _token_margin, _escalation_strategy, _escalation_cost_mult
 
     _config     = load_config("config.yaml")
     _tool_compressor_on = bool(_config.dict().get("tool_result_compressor", False))
@@ -68,8 +72,14 @@ async def lifespan(app: FastAPI):
     )
     _session_pin_enabled = bool(_config.dict().get("session_pin_enabled", True))
     _session_pins.clear()
+    _token_ratio.clear()
     _model_health = ModelHealth(_config._raw.get("model_health"))
     _registry   = ModelRegistry(_config.models, _config.primary_model)
+    _token_margin = float(_config._raw.get("token_estimate_margin", _TOKEN_ESTIMATE_MARGIN))
+    strategy = (_config._raw.get("escalation") or {}).get("strategy", "best_quality")
+    _escalation_strategy = strategy if strategy in ("best_quality", "next_tier") else "best_quality"
+    mult = (_config._raw.get("escalation") or {}).get("max_cost_multiplier")
+    _escalation_cost_mult = float(mult) if mult else None
     # Dashboard "saved vs always-<baseline>" reference; defaults to the primary model.
     _baseline_model = _registry.primary.name
     want = (_config._raw.get("dashboard") or {}).get("baseline_model")
@@ -86,7 +96,10 @@ async def lifespan(app: FastAPI):
         "thinking_mode":          ThinkingModeMutator(),
         "tool_result_compressor": ToolResultCompressorMutator(),
     }
-    _escalation = EscalationPolicy(max_escalations=_config.escalation.max_escalations)
+    _escalation = EscalationPolicy(
+        max_escalations=     _config.escalation.max_escalations,
+        require_higher_tier= _escalation_strategy == "next_tier",
+    )
     _forwarder  = ModelForwarder()
     _log        = RoutingLog(_config.log_path)
 
@@ -195,7 +208,7 @@ def _update_pin(session_id: str, model_name: str, cached_tokens: int, prompt_tok
 
 def _rehome_pin(pin_model: ModelConfig, ctx: RoutingContext) -> ModelConfig | None:
     """Pick a larger-context replacement closest to pin_model in tier and cost."""
-    needed = ctx.features.token_count
+    needed = ctx.needed_tokens(_token_margin)
     candidates = [
         m for m in ctx.registry.all()
         if m.name != pin_model.name
@@ -221,7 +234,7 @@ def _try_hard_pin(
     pin_model = ctx.registry.get(pin.model_name)
     if _request_has_images(ctx.request) and not pin_model.supports_vision:
         return None, "evicted_vision"
-    if ctx.features.token_count > pin_model.context_window:
+    if ctx.needed_tokens(_token_margin) > pin_model.context_window:
         replacement = _rehome_pin(pin_model, ctx)
         if replacement is None:
             return None, "evicted_context"
@@ -242,42 +255,78 @@ def _try_hard_pin(
     ), "hard"
 
 
-# features.token_count is a words*1.3 estimate; real counts for code/JSON-heavy prompts ran ~1.6x
-# higher (308k estimated vs 489k billed), so leave headroom when checking a context window.
-_TOKEN_ESTIMATE_MARGIN = 1.6
+# features.token_count is a words*1.3 estimate. Billed counts for large code/JSON-heavy prompts ran
+# 1.6-2.2x higher (median 1.7; 308k estimated vs 489k billed), so context-window checks scale it.
+# Refined per session from billed usage, and floored by a provider's context-overflow error.
+# Override the default with the top-level `token_estimate_margin` key in config.yaml.
+_TOKEN_ESTIMATE_MARGIN = 1.7
 
 
 def _avoid_failed(decision: RoutingDecision, ctx: RoutingContext) -> RoutingDecision:
-    """Swap the router's pick for a higher-tier model when that pick is unusable.
+    """Swap the router's pick when it is unusable, for the best-scoring model that can do the job.
 
-    Unusable = already failed in this request, or marked bad by ModelHealth
-    (recent failure still inside its TTL). Routers re-score from scratch and can
-    keep choosing the same dead model (e.g. the cheapest-model fallback), so this
-    runs after routing. Picks the cheapest healthy, untried model in the nearest
-    higher tier whose context window fits the request; keeps the router's pick
-    when none exists or an image request would land on a non-vision model.
+    Unusable = already failed in this request, or marked bad by ModelHealth (recent failure inside
+    its TTL). Routers re-score from scratch and can keep choosing the same dead model (e.g. the
+    cheapest-model fallback), so this runs after routing.
+
+    Eligible replacements are healthy, untried, vision-capable if the request has images, and have a
+    context window that fits the (margin-scaled) prompt. With `escalation.strategy: best_quality`
+    (default) and a router that can score models (perf_router), the highest predicted quality for
+    this request wins, cost as tie-break; otherwise the cheapest model in the nearest higher tier.
+    `escalation.max_cost_multiplier` (default off) limits targets to N x the primary's price, so the
+    pick is the best-ranked model within budget rather than the best overall.
+    Keeps the router's pick when nothing eligible exists.
     """
     cur = decision.model
     if cur.name not in ctx.models_tried and not _model_health.is_bad(cur.name):
         return decision
     has_images = _request_has_images(ctx.request)
-    candidates = sorted(
-        (m for m in _registry.all()
-         if m.tier > cur.tier
-         and m.name not in ctx.models_tried
-         and not _model_health.is_bad(m.name)
-         and m.context_window >= ctx.features.token_count * _TOKEN_ESTIMATE_MARGIN
-         and (m.supports_vision or not has_images)),
-        key=lambda m: (m.tier, m.cost_per_1k),
-    )
-    if not candidates:
+    need = ctx.needed_tokens(_token_margin)
+    pool = [
+        m for m in _registry.all()
+        if m.name != cur.name
+        and m.name not in ctx.models_tried
+        and not _model_health.is_bad(m.name)
+        and m.context_window >= need
+        and (m.supports_vision or not has_images)
+    ]
+    if not pool:
         return decision
-    nxt = candidates[0]
+
+    # Optional ceiling: only models up to N x the primary's price. Falls back to the whole pool
+    # rather than failing the request when nothing affordable fits.
+    cap_note = ""
+    if _escalation_cost_mult:
+        ceiling = _registry.primary.cost_per_1k * _escalation_cost_mult
+        affordable = [m for m in pool if m.cost_per_1k <= ceiling]
+        if affordable:
+            pool = affordable
+            cap_note = f"; cost<={_escalation_cost_mult:g}x primary"
+        else:
+            cap_note = "; cost cap relaxed, nothing affordable fits"
+
+    scores = None
+    if _escalation_strategy == "best_quality" and hasattr(_router, "rank_models"):
+        scores = _router.rank_models(ctx)
+    if scores:
+        scored = [m for m in pool if m.name in scores]
+        if scored:
+            nxt = max(scored, key=lambda m: (scores[m.name], -m.cost_per_1k))
+            how = f"best predicted quality={scores[nxt.name]:.3f}"
+        else:
+            scores = None
+    if not scores:
+        higher = [m for m in pool if m.tier > cur.tier]
+        if not higher:
+            return decision
+        nxt = min(higher, key=lambda m: (m.tier, m.cost_per_1k))
+        how = "next tier up"
+
     why = "failed this request" if cur.name in ctx.models_tried else "marked unhealthy"
     return RoutingDecision(
         model=       nxt,
         mutator=     "thinking_mode" if nxt.thinking_mode else "noop",
-        reason=      f"escalated_tier from={cur.name} to={nxt.name} ({why})",
+        reason=      f"escalated from={cur.name} to={nxt.name} ({why}; {how}{cap_note})",
         confidence=  decision.confidence,
         router_name= decision.router_name,
         meta=        decision.meta,
@@ -299,6 +348,8 @@ async def chat_completions(raw: Request) -> JSONResponse:
         session_id=session,
         registry=_registry,
     )
+    if session in _token_ratio:
+        ctx.token_margin = _token_ratio[session] * 1.05     # headroom over the last observed ratio
 
     # ── Session-pin gate ────────────────────────────────────────────────
     pin = _get_active_pin(session, now) if _session_pin_enabled else None
@@ -332,13 +383,19 @@ async def chat_completions(raw: Request) -> JSONResponse:
         if _tool_compressor_on:
             msgs = _mutators["tool_result_compressor"].mutate(msgs, decision)
 
-        response, error_type = await _forwarder.forward(decision.model, req, msgs)
+        fwd_info: dict = {}
+        response, error_type = await _forwarder.forward(decision.model, req, msgs, fwd_info)
         ctx.models_tried.append(decision.model.name)
 
         if error_type is None:
             _model_health.mark_success(decision.model.name)
             break
-        _model_health.mark_failure(decision.model.name, error_type)
+        _model_health.mark_failure(decision.model.name, error_type, fwd_info.get("retry_after_s"))
+        if error_type == "context_overflow":
+            # The provider told us the real size (or at least that this window is too small):
+            # every later pick for this request must hold it.
+            seen = int((fwd_info.get("context_tokens") or 0) * 1.05)
+            ctx.token_floor = max(ctx.token_floor, seen, decision.model.context_window + 1)
 
         # Pinned-model failure → drop the pin and let the next attempt route freely
         if attempt == 0 and pinned_decision is not None:
@@ -356,6 +413,10 @@ async def chat_completions(raw: Request) -> JSONResponse:
     usage      = response.get("usage", {})
     cached_tokens = usage.get("_optmod_cached_tokens", 0)
     prompt_tokens_val = usage.get("prompt_tokens", 0)
+
+    est_tokens = features.token_count
+    if error_type is None and est_tokens >= 1000 and prompt_tokens_val > 0:
+        _token_ratio[session] = min(4.0, max(1.0, prompt_tokens_val / est_tokens))
 
     if error_type is None and decision is not None and _session_pin_enabled:
         _update_pin(session, decision.model.name, cached_tokens, prompt_tokens_val, now)

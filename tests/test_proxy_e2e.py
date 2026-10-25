@@ -216,4 +216,4 @@ def test_swap_never_picks_a_model_too_small_for_the_prompt(client):
     finally:
         m._model_health.clear()
     assert out.model.name != cur.name
-    assert out.model.context_window >= 200_000 * m._TOKEN_ESTIMATE_MARGIN
+    assert out.model.context_window >= 200_000 * m._token_margin

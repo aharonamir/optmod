@@ -15,6 +15,13 @@ from optmod.schemas import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _no_token_margin(monkeypatch):
+    """These tests exercise pin mechanics with exact token counts, not the estimate margin."""
+    from optmod import main
+    monkeypatch.setattr(main, "_token_margin", 1.0)
+
+
 @pytest.fixture
 def registry():
     """Mirror the conftest registry but include supports_vision + a small-context model."""

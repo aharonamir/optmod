@@ -200,6 +200,11 @@ class PerfRouterRouter(BaseRouter):
             bonus_cfg if bonus_cfg is not None else (bonus_env or 0.5)
         )
 
+        # features.token_count is a words*1.3 estimate; billed counts for code/JSON-heavy prompts
+        # run ~1.6-2.2x higher (see main.py), so context filtering uses a scaled count
+        # (RoutingContext.needed_tokens: session-learned ratio / overflow floor override this).
+        self._token_margin = float(config.get("token_estimate_margin", 1.7))
+
         # cost_cap_multiplier: YAML null → Python None → pass as float("inf") to inference
         cap_raw = perf_cfg.get("cost_cap_multiplier", 2.0)
         self._cost_cap_multiplier = cap_raw  # None means cap disabled
@@ -309,6 +314,54 @@ class PerfRouterRouter(BaseRouter):
                 return mid
         return None
 
+    @staticmethod
+    def _last_user_messages(ctx: RoutingContext) -> list[str]:
+        """Text of the last 3 user messages (see _route for why only user messages)."""
+        user_messages = []
+        for msg in ctx.request.messages:
+            if msg.role != "user":
+                continue
+            if isinstance(msg.content, str) and msg.content.strip():
+                content = _extract_content(msg.content.strip())
+            elif isinstance(msg.content, list):
+                content = " ".join(
+                    _extract_content(p.get("text", ""))
+                    for p in msg.content
+                    if isinstance(p, dict) and p.get("type") == "text"
+                ).strip()
+            else:
+                content = ""
+            if content:
+                user_messages.append(content)
+        return user_messages[-3:]
+
+    def rank_models(self, ctx: RoutingContext) -> dict[str, float] | None:
+        """Predicted quality per registry model name for this request, or None.
+
+        Same routing text as route(). Used by main.py to pick the best-scoring escalation
+        target; ignores cost on purpose. Never raises.
+        """
+        try:
+            if not self._ready:
+                return None
+            last_3 = self._last_user_messages(ctx)
+            if not last_3:
+                return None
+            text = "\n".join(last_3 + [last_3[-1]])
+            quality = self._perf_router.predict_quality(self._perf_router.classify_task(text))
+            names = {m.name: _normalize(m.name) for m in ctx.registry.all()}
+            out: dict[str, float] = {}
+            for mid, q in quality.items():
+                norm = _normalize(mid)
+                local = _normalize(mid.split("/")[-1])
+                for name, nn in names.items():
+                    if nn == norm or nn == local or _normalize(name.split("/")[-1]) == local:
+                        out[name] = float(q)
+            return out or None
+        except Exception as exc:
+            logging.warning("[optmod] PerfRouterRouter.rank_models error: %s", exc)
+            return None
+
     def route(self, ctx: RoutingContext) -> RoutingDecision:
         if not self._ready:
             return self._passthrough(ctx, "perf_router: not initialised, using primary")
@@ -319,7 +372,7 @@ class PerfRouterRouter(BaseRouter):
             return self._passthrough(ctx, f"perf_router error: {exc}")
 
     def _route(self, ctx: RoutingContext) -> RoutingDecision:
-        token_count = ctx.features.token_count or None
+        token_count = ctx.needed_tokens(self._token_margin) or None
 
         # ── Detect image attachments ──────────────────────────────────────────
         has_images = False
@@ -344,24 +397,7 @@ class PerfRouterRouter(BaseRouter):
         #
         # The last message is repeated at the end to bias the embedding
         # toward the current intent without losing surrounding context.
-        user_messages = []
-        for msg in ctx.request.messages:
-            if msg.role != "user":
-                continue
-            if isinstance(msg.content, str) and msg.content.strip():
-                content = _extract_content(msg.content.strip())
-            elif isinstance(msg.content, list):
-                content = " ".join(
-                    _extract_content(p.get("text", ""))
-                    for p in msg.content
-                    if isinstance(p, dict) and p.get("type") == "text"
-                ).strip()
-            else:
-                content = ""
-            if content:
-                user_messages.append(content)
-
-        last_3 = user_messages[-3:]
+        last_3 = self._last_user_messages(ctx)
 
         # Laya sees the same window without the repeated last message (the
         # repeat is a MiniLM weighting trick). Keep the tail: current turn is last.

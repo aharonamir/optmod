@@ -132,6 +132,27 @@ model_health:
   ttl_s: { not_found: 3600, server: 120, timeout: 120, rate_limit: 30, auth: 600 }   # 0 = never mark that error
 ```
 
+**Provider-advertised resets.** When a failure carries `Retry-After` or `X-RateLimit-Reset` (response headers,
+or OpenRouter's `error.metadata.headers`), that wait replaces the configured TTL, capped at
+`model_health.max_ttl_s` (86400). This is what keeps an exhausted free-tier model (daily cap) out of rotation
+until its reset instead of retrying every 30 s.
+
+**Escalation target** (`escalation.strategy`, `_avoid_failed()` in `main.py`): `best_quality` (default) picks the
+healthy, untried model with the highest predicted quality for this request (`PerfRouterRouter.rank_models`,
+cost as tie-break) whose context window fits the prompt; it may be any tier, and `EscalationPolicy` no longer
+requires a higher tier. Optional `escalation.max_cost_multiplier` (default null = off) restricts targets to N× the
+primary's price per 1k, so the pick is the best-ranked model within budget (relaxed, and noted in the reason,
+if nothing affordable fits). `next_tier` keeps the old cheapest-model-in-the-next-tier rule. Routers without
+`rank_models` use `next_tier`.
+
+**Prompt size.** `features.token_count` (words × 1.3) undercounts big code/JSON prompts by 1.6–2.2× (logged: 308k
+estimated vs 489k billed). Context-window checks (perf_router `route()`, swap, pin rehome) use
+`RoutingContext.needed_tokens()`: the estimate × `token_estimate_margin` (top-level key, default 1.7), or, once
+the session has a successful turn, × its observed billed/estimated ratio (`_token_ratio`, +5% headroom).
+A 400 whose body is a context-overflow error is error type `context_overflow` (retryable, not marked
+unhealthy): the size in the message (or the failed model's window + 1) becomes `ctx.token_floor`, so the next
+pick must have a window that holds it.
+
 `bad_request` (400) is never marked and never escalates. `auth` (401/403) escalates and marks the model for
 `ttl_s.auth`, since a rejected key/access is usually per model. A 404 is error type `not_found` (retryable).
 Marked models are listed under `model_health` in `GET /optmod/status`. Swapped decisions log
@@ -168,7 +189,7 @@ features.py                          FeatureExtractor — <1ms regex classifier,
 forwarder.py                         httpx async forwarder, one AsyncClient per base_url; defensive
                                      cached_tokens extraction into usage._optmod_cached_tokens
 escalation.py                        EscalationPolicy
-model_health.py                      ModelHealth — per-model failure TTL (not_found/server/timeout/rate_limit)
+model_health.py                      ModelHealth — per-model failure TTL (by error type, or provider reset time)
 log.py                               RoutingLog — append-only JSONL, threading.Lock
 stats.py                             /api/stats aggregation incl. cache_hit_rate, cached_tokens
                                      totals; _TIER_MAP loaded from config.yaml at import
@@ -197,6 +218,7 @@ tests/test_escalation.py             Unit tests — EscalationPolicy
 tests/test_session_pin.py            Unit tests — pin helpers, escapes, rehoming, cache extraction
 tests/test_tool_result_compressor.py Unit tests — every compression filter and edge case
 tests/test_model_health.py           Unit tests — ModelHealth TTLs
+tests/test_best_quality_escalation.py Unit tests — reset-header TTL, best-score swap, rank_models, margin
 tests/test_laya_tier.py              Unit tests — Laya classifier, resolve_tier_params, router + log plumbing
 tests/test_live_e2e.py               Live tests hitting real providers — skipped if no API key
 ```
@@ -219,7 +241,8 @@ tests/test_live_e2e.py               Live tests hitting real providers — skipp
 uv run pytest tests/test_proxy_e2e.py tests/test_routers.py \
               tests/test_features.py tests/test_escalation.py \
               tests/test_session_pin.py tests/test_tool_result_compressor.py \
-              tests/test_laya_tier.py tests/test_model_health.py -v
+              tests/test_laya_tier.py tests/test_model_health.py \
+              tests/test_best_quality_escalation.py -v
 
 # Live e2e (requires OPENROUTER_API_KEY + DEEPSEEK_API_KEY in .env)
 uv run pytest tests/test_live_e2e.py -v -s
