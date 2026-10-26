@@ -86,7 +86,7 @@ policy_path: routing_policy.pkl
 log_path: routing.log.jsonl
 escalation:
   max_escalations: 2
-  max_cost_multiplier: null   # null = no ceiling; e.g. 5 = only targets up to 5x the primary's price/1k
+  max_cost_multiplier: 10     # null = no ceiling; e.g. 5 = only targets up to 5x the primary's price/1k
   strategy: best_quality   # best_quality = highest predicted score among models that fit; next_tier = cheapest in the tier above
 
 # context-window checks multiply the estimated prompt tokens by this (estimate undercounts big prompts);

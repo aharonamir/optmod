@@ -244,6 +244,42 @@ def test_swap_after_overflow_requires_a_window_for_the_reported_size(wired):
     assert out.model.name == "best-fit"                 # best score among models with window >= 80k
 
 
+def test_swap_relaxes_margin_when_no_window_holds_the_scaled_estimate(wired):
+    main, reg = wired
+    # 300k x 1.8 = 540k exceeds every window (500k), but the raw estimate fits: must not resend.
+    ctx = _ctx(reg, tokens=300_000)
+    ctx.models_tried.append("cheap-mid")
+    out = main._avoid_failed(_decision(reg, "cheap-mid"), ctx)
+    assert out.model.name == "best-fit"
+
+
+def test_swap_picks_largest_window_when_even_the_raw_estimate_does_not_fit(wired):
+    main, reg = wired
+    ctx = _ctx(reg, tokens=600_000)
+    ctx.models_tried.append("cheap-mid")
+    out = main._avoid_failed(_decision(reg, "cheap-mid"), ctx)
+    assert out.model.name != "cheap-mid"
+    assert out.model.context_window == 500_000
+
+
+def test_escalation_pin_only_when_within_cost_multiplier(wired, monkeypatch):
+    main, reg = wired
+    monkeypatch.setattr(main, "_escalation_cost_mult", 10)      # primary cheap-mid 0.001 -> 0.01 ceiling
+    ok = _decision(reg, "worse-fit")                            # 0.005
+    ok.reason = "escalated from=dead to=worse-fit (failed this request)"
+    assert main._escalated_over_budget(ok) is False
+    pricey = _decision(reg, "best-fit")                         # 0.01 -> at ceiling, still ok
+    pricey.reason = ok.reason
+    assert main._escalated_over_budget(pricey) is False
+    over = RoutingDecision(model=reg.get("best-fit"), mutator="noop", reason=ok.reason,
+                           confidence=1.0, router_name="R")
+    monkeypatch.setattr(main, "_escalation_cost_mult", 5)       # ceiling 0.005 -> 0.01 is over
+    assert main._escalated_over_budget(over) is True
+    plain = _decision(reg, "best-fit")
+    plain.reason = "perf_router: normal pick"
+    assert main._escalated_over_budget(plain) is False          # only escalations are affected
+
+
 def test_e2e_overflow_recovers_on_a_bigger_model_and_learns_the_ratio(client_main):
     import json
     client, main = client_main

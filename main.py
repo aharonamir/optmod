@@ -282,14 +282,29 @@ def _avoid_failed(decision: RoutingDecision, ctx: RoutingContext) -> RoutingDeci
         return decision
     has_images = _request_has_images(ctx.request)
     need = ctx.needed_tokens(_token_margin)
-    pool = [
-        m for m in _registry.all()
-        if m.name != cur.name
-        and m.name not in ctx.models_tried
-        and not _model_health.is_bad(m.name)
-        and m.context_window >= need
-        and (m.supports_vision or not has_images)
-    ]
+
+    def _eligible(min_window: int) -> list:
+        return [
+            m for m in _registry.all()
+            if m.name != cur.name
+            and m.name not in ctx.models_tried
+            and not _model_health.is_bad(m.name)
+            and m.context_window >= min_window
+            and (m.supports_vision or not has_images)
+        ]
+
+    pool = _eligible(need)
+    if not pool:
+        # The margin-scaled estimate can exceed every window in the registry (310k est x 1.7 = 528k
+        # vs a 525k max) although the prompt really fits (provider billed 492k). Relax to the raw
+        # estimate / provider floor, then to the largest untried window, rather than resending to
+        # a model that already failed.
+        pool = _eligible(max(ctx.features.token_count, ctx.token_floor))
+    if not pool:
+        untried = _eligible(0)
+        if untried:
+            top = max(m.context_window for m in untried)
+            pool = [m for m in untried if m.context_window == top]
     if not pool:
         return decision
 
@@ -331,6 +346,15 @@ def _avoid_failed(decision: RoutingDecision, ctx: RoutingContext) -> RoutingDeci
         router_name= decision.router_name,
         meta=        decision.meta,
     )
+
+
+def _escalated_over_budget(decision: RoutingDecision) -> bool:
+    """True for an escalation target pricier than `escalation.max_cost_multiplier` x primary
+    (only reachable when the cap was relaxed because nothing affordable fit). Escalations inside
+    the budget may be pinned like any other pick."""
+    if not _escalation_cost_mult or not decision.reason.startswith("escalated from="):
+        return False
+    return decision.model.cost_per_1k > _registry.primary.cost_per_1k * _escalation_cost_mult
 
 
 @app.post("/v1/chat/completions")
@@ -419,7 +443,10 @@ async def chat_completions(raw: Request) -> JSONResponse:
         _token_ratio[session] = min(4.0, max(1.0, prompt_tokens_val / est_tokens))
 
     if error_type is None and decision is not None and _session_pin_enabled:
-        _update_pin(session, decision.model.name, cached_tokens, prompt_tokens_val, now)
+        if _escalated_over_budget(decision):
+            _session_pins.pop(session, None)   # a one-off rescue above budget must not stick
+        else:
+            _update_pin(session, decision.model.name, cached_tokens, prompt_tokens_val, now)
 
     meta = decision.meta if decision is not None else {}
     _log.append(LogEntry(
