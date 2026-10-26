@@ -1007,7 +1007,17 @@ const TASK_COLORS = {
   'summarize': '#5B8FFF',
   'search':    '#F05252',
   'general':   '#4A6080',
+  // PerfRouter task families (id prefix before the dot)
+  'tool_use':  '#00C2D4',
+  'retrieval': '#F05252',
+  'synthesis': '#5B8FFF',
+  'reasoning': '#F5A623',
+  'instruction': '#22D47A',
+  'multimodal': '#E05CC0',
+  'safety':    '#8A94A6',
+  'social':    '#C9A227',
 };
+const taskColor = t => TASK_COLORS[t] || TASK_COLORS[(t || '').split('.')[0]] || '#4A6080';
 
 // ── HELPERS ───────────────────────────────────────
 function shortModel(name) {
@@ -1283,7 +1293,7 @@ function renderTaskDist(d) {
 
   const html = `<div class="task-grid">` + sorted.map(([name, count]) => {
     const p     = count / total * 100;
-    const color = TASK_COLORS[name] || '#4A6080';
+    const color = taskColor(name);
     return `
       <div class="task-cell">
         <span class="task-name">
@@ -1423,7 +1433,7 @@ function renderTable(d) {
     return `
       <tr${isNew ? ' class="row-new"' : ''}>
         <td class="ts-cell">${fmtTs(r.ts)}</td>
-        <td><span style="color:${TASK_COLORS[r.task_type] || '#4A6080'}">${r.task_type || '—'}</span></td>
+        <td><span style="color:${taskColor(r.task_type)}">${r.task_type || '—'}</span></td>
         <td><span class="badge ${modelBadgeClass} model-badge" title="${fullName}">${shortName}</span></td>
         <td><div class="tried-chain">${triedHtml}</div></td>
         <td>${costHtml}</td>

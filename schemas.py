@@ -102,6 +102,7 @@ class LogEntry:
     completion_tokens: int
     cached_tokens:     int = 0
     pin_state:         str = "fresh"
+    regex_task_type:   str = ""   # legacy FeatureExtractor label; task_type prefers pr_task_type
     # PerfRouter / Laya tier diagnostics (defaults for other routers and pins)
     pr_task_type:       str = ""
     pr_routing_mode:    str = ""

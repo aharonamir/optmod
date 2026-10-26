@@ -44,6 +44,7 @@ _config:               Config              | None = None
 _tool_compressor_on:   bool               = False
 _session_pin_enabled:  bool               = True
 _session_pins:         dict[str, SessionPin] = {}
+_session_task_type:    dict[str, str] = {}   # last PerfRouter task type per session (for pinned turns)
 _model_health:         ModelHealth = ModelHealth()
 _baseline_model:       str = ""
 _token_margin:         float = 1.7
@@ -449,10 +450,16 @@ async def chat_completions(raw: Request) -> JSONResponse:
             _update_pin(session, decision.model.name, cached_tokens, prompt_tokens_val, now)
 
     meta = decision.meta if decision is not None else {}
+    # Shown task type: PerfRouter's own classification (carried over to hard-pinned turns, which
+    # skip the router) rather than the keyword regex, whose "tool_call" matches nearly any agent prompt.
+    if meta.get("pr_task_type"):
+        _session_task_type[session] = meta["pr_task_type"]
+    shown_task_type = _session_task_type.get(session) or features.task_type
     _log.append(LogEntry(
         ts=                _now_iso(),
         session_id=        session,
-        task_type=         features.task_type,
+        task_type=         shown_task_type,
+        regex_task_type=   features.task_type,
         difficulty=        features.difficulty,
         token_count=       features.token_count,
         has_tools=         features.has_tools,
