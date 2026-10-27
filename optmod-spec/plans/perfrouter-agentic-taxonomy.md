@@ -145,3 +145,29 @@ Reading it:
 - Caveat: LLM-made labels favour LLM-style classifiers (Jev, the chat model). Hand-check the labels before deciding.
 - Decision: keep MiniLM for now. Revisit Jev (hosted API: prompts leave the machine, ~0.4 s per session start, memoizable
   per session) once the quality model is retrained on SkillsBench; then a better type may matter.
+
+## Next steps: optional Jev task classifier (phase 5, after phase 4)
+
+Make the task-type classifier pluggable so hosted Jev can replace MiniLM by config, off by default (MiniLM stays the default,
+needs no network). Jev only classifies; the quality model, softmax weights and escalation are unchanged. Worth doing after the
+quality model is retrained (phase 4): today most types route to the same few models, so the better label barely changes the pick.
+
+1. **Config:** `perf_router.task_classifier: minilm | jev` (default `minilm`), plus a `jev:` block (`model: typesafe/jev-1.13`,
+   `api_key_env: OPENROUTER_API_KEY`, `timeout_ms`, `max_chars: 2000`, `breaker_failures`, `breaker_cooldown_s`).
+   Toggle at runtime like Laya (`POST /optmod/task-classifier/{minilm|jev}`; status in `GET /optmod/status`).
+2. **Backend:** one `choice` question over the 33 types, definitions as criteria, via `POST https://openrouter.ai/api/alpha/decisions`
+   (flat beat family-then-type in the comparison). Output: the type plus its probability, used as the top-1 "similarity".
+3. **Top-k:** the Jev probabilities give the top-3 types for the softmax weighting directly (they are already a distribution;
+   use them as weights instead of the cosine scores, with `min_similarity` replaced by a probability floor).
+4. **Memo per session:** the task prompt repeats every turn, so classify once per session id and reuse (also skips the 0.4 s call).
+   Cache key = hash of the first user message, same idea as the Laya memo.
+5. **Failure handling:** never raise; on timeout, error, 4xx/5xx or an open breaker, fall back to MiniLM for that request and
+   log it. Same breaker pattern as `laya_tier.py`.
+6. **Logging:** `pr_classifier` (`minilm` / `jev` / `jev_fallback_minilm`), `pr_task_type`, `pr_top_similarity` (probability
+   for Jev), `jev_ms`. Prompt text is never logged.
+7. **Privacy and cost:** task prompts leave the machine (first 2,000 characters). State this next to the config key; cost is
+   about $0.04 per 1M input tokens, negligible next to the model calls.
+8. **Validate before enabling:** rerun `eval_task_classifiers.py` on hand-checked labels and compare routed models, then a
+   live SkillsBench run with `jev` vs `minilm`.
+9. **Open weights alternative:** `autotrust/JEV-9B/27B` (Apache-2.0) would keep prompts local but need vLLM and more VRAM than
+   the 12 GB GPU here; only if the hosted API is unacceptable.
