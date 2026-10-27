@@ -1,0 +1,91 @@
+# PerfRouter taxonomy for agentic (SkillsBench-style) prompts
+
+## Phases
+
+| Phase | Status | Scope |
+|---|---|---|
+| 1 | Done (`bfa4094`) | Log/dashboard show `pr_task_type` instead of the keyword-regex `tool_call` label. |
+| 2 | **Done** (uncommitted) | 56 agentic examples in `../perfrouter/data/agentic_examples.json`, merged by `patch_taxonomy_agentic.py`; inference scores each type by its closest example (`example_pooling: max`). No new types, so no XGBoost retrain. |
+| 3 | **Done** (uncommitted) | `softmax_temperature` weights, `min_similarity` 0.20 -> 0.25, `low_similarity_fallback: general`. Metadata hint not built. Validation (live run, hand labels) is yours. |
+
+Training repo: `../perfrouter` (taxonomy built by `perfrouter/pipeline/build_task_taxonomy.py`, one-shot; inference
+in `perfrouter/inference/perf_router_inference.py`, copied into `routing/perfrouter/` here).
+
+## Problem (2026-10-26 replay of 87 SkillsBench `task.md` prompts)
+
+- Median top-1 similarity 0.25; 13 of 87 are below `min_similarity` 0.20, so they take `fallback_ambiguous` (cheapest model).
+- Top-1 vs top-2 gaps are often a few hundredths, so the winning type is close to noise
+  (`3d-scan-calc` -> `instruction.format_constraint`, `adaptive-cruise-control` -> `tool_use.multi_step_workflow` at 0.17).
+- Each type is embedded from its **definition + the first 2 examples only** (`perf_router_inference.py:324`); the examples
+  are short one-liners ("find the bug in this function"), far from a real agent task prompt (long, file paths, constraints).
+- Agent traffic repeats the same task prompt every turn, so one classification decides the whole session.
+
+## Phase 2: examples and embedding
+
+1. **Write SkillsBench-style examples per type.** Realistic 2-4 sentence task prompts, grouped by the SkillsBench
+   categories (software-engineering 16, office-white-collar 14, natural-science 14, industrial-physical-systems 14,
+   finance-economics 9, mathematics/formal 8, cybersecurity 7, media-content 5) and their `task_type` tags
+   (analysis, calculation, transformation, implementation, detection, optimization, extraction, planning, repair).
+   Example domains to cover: PDF/spreadsheet/CSV form filling and extraction, binary/file-format parsing, scientific
+   data analysis (hydrology, astronomy, seismology), simulation/control code, vulnerability and intrusion analysis,
+   video/media processing, performance optimization, economic/finance calculation.
+2. **Map them to existing types before adding new ones.** Most fit `tool_use.terminal_agent`, `code.scientific_coding`,
+   `synthesis.data_analysis_report`, `retrieval.document_extraction`, `code.debugging`. Add a new type only where no
+   type fits (candidates: `agentic.file_format_processing`, `agentic.domain_calculation`) and give it
+   `benchmark_weights` from terminal-bench / tau2 / scicode so the quality model has an affinity column for it.
+3. **Do not hand-write labels from the replay.** Hold out ~20 of the 87 `task.md` prompts as a test set; write examples
+   from the rest (or from generic descriptions), so the accuracy figure is not measured on training text.
+4. **Use all examples at inference.** Change the task-type embedding from `definition + examples[:2]` to the mean
+   (normalised) of the per-example embeddings plus the definition, or max-sim over examples. Re-check cost: embeddings
+   are computed once at startup.
+5. **Strip harness boilerplate before classifying.** Agent first messages carry instructions around the task; extract the
+   task body (the `_extract_content` hook in `router.py`) so wrapper text does not dominate the embedding.
+6. **Regenerate** `task_taxonomy.json` via `patch`, not a full `build_task_taxonomy.py` rerun (CLAUDE.md in the
+   training repo says never regenerate unless the taxonomy changes; adding types is that case), then retrain
+   `perf_router.pkl` and copy the artifacts into `routing/perfrouter/`.
+
+## Phase 3: scoring and thresholds
+
+1. **Margin-aware weights.** `predict_quality` weights the top-3 types by raw similarity; use a softmax with a temperature
+   so a 0.01 gap is a near-tie and the quality prediction is a blend, not a coin flip.
+2. **`min_similarity` for agent traffic.** With better examples re-measure the similarity distribution and set the
+   threshold from the data; consider a low-similarity rescue (see `laya-difficulty-tier.md` phase 3) instead of the
+   cheapest-model fallback.
+3. **Optional metadata hint.** If the harness passes SkillsBench category/subcategory, map it directly to a task type.
+
+## Validation
+
+- Replay the 87 `task.md` prompts (script: classify first 1,500 chars of the body after the front matter); report
+  below-threshold rate, median top-1 similarity, and top-1/top-2 gap before and after.
+- Held-out accuracy against a hand-labelled subset of ~20 tasks (primary type acceptable set, not one label).
+- Offline: chosen model and predicted cost per task before/after; then a live SkillsBench run comparing pass rate and
+  cost per solved task from `routing.log.jsonl` (`pr_task_type`, `pr_top_similarity`, `pr_routing_mode`).
+
+## Implementation notes (2026-10-26)
+
+- **Deviation: no new task types.** Types have per-type affinity columns in the XGBoost model, so a new type needs benchmark
+  weights and a retrain. All SkillsBench-style prompts fit existing types (terminal_agent, scientific_coding,
+  data_analysis_report, document_extraction, code_review, ...). Revisit if validation shows a real gap.
+- **Examples** live in `../perfrouter/data/agentic_examples.json` (source of truth), merged into `task_taxonomy.json` as
+  `agentic_examples` by `python -m perfrouter.pipeline.patch_taxonomy_agentic` (idempotent). Re-run it after any taxonomy rebuild.
+  Written from generic domains, not benchmark text. Training does not read them; only inference does.
+- **Inference** (`perf_router_inference.py` in both repos): a type's similarity = max over its definition text and its examples
+  (`example_pooling: none` restores the legacy definition + 2 examples). `softmax_temperature` (0.05) replaces the linear
+  similarity weights across the top-3 types in `predict_quality`; null = legacy.
+- **Low similarity:** `low_similarity_fallback: general` routes below `min_similarity` using the task-agnostic quality prior
+  (all types weighted equally, normal degradation/cost logic) with `pr_routing_mode = general_prior`; `cheapest` = legacy
+  `fallback_ambiguous`. Laya stays observe-only on these rows.
+- **Replay** (`python -m perfrouter.tools.replay_skillsbench --tasks ~/workspace/skillsbench/tasks --pooling none|max`),
+  87 tasks, every 4th held out:
+
+  | | median top-1 sim | below 0.20 | top1-top2 gap < 0.02 |
+  |---|---|---|---|
+  | legacy (`none`) | 0.251 | 15% | 30% |
+  | `max` + examples | 0.373 | 0% | 32% |
+
+  The similarity scale moved up (5th/10th percentile 0.24/0.26), hence `min_similarity` 0.25 (about 5-8% of tasks fall back).
+  The top1-top2 gap barely moved: near-ties between neighbouring types remain, which is what the softmax blend is for.
+  Held-out top-1 labels look sensible on a spot check; accuracy against hand labels is not measured.
+- **Not built:** the SkillsBench category metadata hint (needs the harness to pass it), chunked embedding of long prompts
+  (MiniLM truncates at 256 tokens, so only the start of a long prompt is embedded), and boilerplate stripping (no wrapper
+  text seen in logged sessions, as the user text is the task prompt).

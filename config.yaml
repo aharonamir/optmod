@@ -45,7 +45,11 @@ perf_router:
   checkpoint: auto             # auto = look in {data_dir}/../models/perf_router.pkl, then {data_dir}/
   cost_weight: 0.3
   degradation_threshold: 0.15
-  min_similarity: 0.20
+  min_similarity: 0.25         # re-measured with agentic examples (SkillsBench replay: ~5th percentile)
+  # Task classification for agent traffic (plans/perfrouter-agentic-taxonomy.md)
+  example_pooling: max         # max: score types against taxonomy `agentic_examples` too; none: legacy
+  softmax_temperature: 0.05    # weights of the top-3 task types; null = linear similarity weights
+  low_similarity_fallback: general   # below min_similarity: general = task-agnostic quality prior; cheapest = legacy
   baseline: deepseek/deepseek-v4-flash
   cost_cap_multiplier: 2.0     # null to disable cap entirely
   # Laya difficulty tier: per-request δ and cost cap. Missing block = off.

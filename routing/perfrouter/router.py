@@ -192,6 +192,12 @@ class PerfRouterRouter(BaseRouter):
             min_sim_cfg if min_sim_cfg is not None else (min_sim_env or 0.20)
         )
 
+        # Task classification (phase 2/3 of perfrouter-agentic-taxonomy plan)
+        self._example_pooling = str(perf_cfg.get("example_pooling") or "max")
+        temp_cfg = perf_cfg.get("softmax_temperature")
+        self._softmax_temperature = float(temp_cfg) if temp_cfg else None
+        self._low_sim_fallback = str(perf_cfg.get("low_similarity_fallback") or "cheapest")
+
         pin_cfg = config.get("session_pin", {})
         bonus_cfg = (pin_cfg.get("soft_bonus_weight")
                      or config.get("session_pin_soft_bonus_weight"))
@@ -256,6 +262,12 @@ class PerfRouterRouter(BaseRouter):
                 "baseline_model":           self._baseline,
                 "min_similarity_threshold": self._min_similarity,
             }
+            params = inspect.signature(PerfRouterInference.__init__).parameters
+            for key, val in (("example_pooling", self._example_pooling),
+                             ("softmax_temperature", self._softmax_temperature),
+                             ("low_sim_fallback", self._low_sim_fallback)):
+                if key in params:   # an older installed perfrouter package may lack these
+                    init_kwargs[key] = val
             if "models_yaml_path" in inspect.signature(PerfRouterInference.__init__).parameters:
                 init_kwargs["models_yaml_path"] = models_yaml_path
 

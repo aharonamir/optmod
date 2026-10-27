@@ -66,6 +66,14 @@ Pin state is in-memory only (`_session_pins: dict[str, SessionPin]` in `main.py`
 
 Config knobs: `session_pin_hard_window_s`, `session_pin_soft_window_s`, `session_pin_soft_bonus_weight`. Per-model `supports_vision: true` declares vision capability.
 
+### Task classification knobs (`perf_router:`)
+
+`example_pooling: max` scores each task type against its definition and the taxonomy's `agentic_examples` (agent-style
+prompts, built in `../perfrouter`; `none` = legacy). `softmax_temperature` (0.05) weights the top-3 types by softmax of
+similarity (null = linear). `min_similarity` (0.25) is the floor for trusting the classification; below it
+`low_similarity_fallback: general` uses the task-agnostic quality prior (`pr_routing_mode=general_prior`) and `cheapest`
+keeps the legacy cheapest-model `fallback_ambiguous`. Plan: `optmod-spec/plans/perfrouter-agentic-taxonomy.md`.
+
 ## Laya Difficulty Tier (perf_router only)
 
 [Laya](https://github.com/nandhakishorm/laya) (optional extra: `uv pip install -e '.[laya]'`) classifies each
