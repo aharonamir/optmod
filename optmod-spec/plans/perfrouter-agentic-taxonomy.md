@@ -146,6 +146,29 @@ Reading it:
 - Decision: keep MiniLM for now. Revisit Jev (hosted API: prompts leave the machine, ~0.4 s per session start, memoizable
   per session) once the quality model is retrained on SkillsBench; then a better type may matter.
 
+## Live check through the proxy (2026-10-27)
+
+`scripts/send_task_types.py` sends one fresh agent-style prompt per type (33; not the taxonomy examples) through the running
+proxy and prints expected vs logged `pr_task_type`. Run on the 84-model pool with the settings above (`example_pooling: max`,
+`softmax_temperature: 0.05`, `min_similarity: 0.25`, `low_similarity_fallback: general`). All 33 requests returned 200 and went
+to ~14 different models, so the pool routes widely. Rows are visible in `/ui` with the family colours.
+
+**17/33 matched the intended type.** Prompts are single turns written by hand, so this is a smoke check, not an accuracy figure.
+
+| Group | Expected → got |
+|---|---|
+| Near-duplicate types (probably fine) | creative_writing → creative_media, logical_puzzle → hard_general, mathematical → code.puzzle_or_algorithm, competition_math → code.puzzle_or_algorithm |
+| No attachment sent (expected) | visual_reasoning → data_analysis_report, long_context → document_extraction |
+| Agent tool types (real weakness) | file_or_system_operation → complex_following, multi_step_workflow → report_or_summary, terminal_agent → repo_code_search, api_chaining → code.generation |
+| Other misses | constraint_following → repo_code_search, conversation_analysis → long_context, creative_media → code_review, structured_data → format_constraint, hard_general → long_context, knowledge_qa → report_or_summary |
+
+- `general_prior` fired on 4 rows (scientific, competition_math, knowledge_qa, logical_puzzle; similarity 0.16-0.24). Short factual
+  and competition-math prompts are the weakest classifications.
+- The `tool_use.*` types are what SkillsBench traffic looks like and all four missed. A single prompt is not a real multi-turn
+  agent session, so replay a real SkillsBench run before drawing conclusions. This supports phase 4 (retrain on SkillsBench)
+  and phase 5 (Jev) as the places to improve.
+- Prompts carry a `[run N]` prefix (keeps sessions unique), which slightly lowers similarity.
+
 ## Next steps: optional Jev task classifier (phase 5, after phase 4)
 
 Make the task-type classifier pluggable so hosted Jev can replace MiniLM by config, off by default (MiniLM stays the default,
