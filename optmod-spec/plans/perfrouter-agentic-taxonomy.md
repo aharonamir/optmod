@@ -111,3 +111,37 @@ type does not guarantee the quality ranking for that type matches how models do 
 6. **Re-tune** `cost_weight`, `degradation_threshold` and `min_similarity` on the new model.
 
 Also confirm how the current `.pkl` was trained (whether a WCB CSV was used; the file is dated 2026-10-05).
+
+## Classifier comparison (2026-10-27)
+
+Tool: `../perfrouter/perfrouter/tools/eval_task_classifiers.py`; labels: `../perfrouter/data/skillsbench_task_labels.json`
+(acceptable type sets for the 87 tasks, written by an LLM from the first ~300 characters; **noisy**, a rough yardstick only).
+Every method must output one of the 33 taxonomy types. Models get the first 2,000 characters; MiniLM sees the full body
+(it truncates at 256 tokens). Run: `PYTHONPATH=~/workspace/perfrouter uv run [--with gliclass] python -m perfrouter.tools.eval_task_classifiers --methods ...`.
+
+| method | top-1 = primary | in acceptable set | family ok | ms/task | model routed in acceptable set |
+|---|---|---|---|---|---|
+| MiniLM legacy (def + 2 examples) | 20% | 24% | 32% | 68 | 39% |
+| MiniLM + agentic examples (current) | 26% | 45% | 61% | 43 | 60% |
+| MiniLM chunk-pooled | 28% | 44% | 60% | 6 | 54% |
+| Laya, 33 options | 13% | 17% | 57% | 27 | 37% |
+| Laya, family then type | 23% | 37% | 57% | 37 | 47% |
+| **Jev 1.13 hosted (OpenRouter), 33 options** | **53%** | **64%** | **72%** | 433 | 60% |
+| Jev, family then type | 46% | 55% | 63% | 862 | 53% |
+| deepseek-v4-flash as classifier (reference) | 40% | 53% | 68% | 1261 | 56% |
+| ModernBERT-large zero-shot NLI | 41% | 51% | 55% | 611 | 61% |
+| DeBERTa-v3-large zero-shot NLI | 30% | 38% | 39% | 711 | 53% |
+| GLiClass modern-base v3 | 25% | 34% | 55% | 230 | 53% |
+| GLiClass large v3 | 34% | 43% | 57% | 509 | 51% |
+
+Reading it:
+- Hosted Jev is the most accurate classifier here (+19 points over the current MiniLM in acceptable-set hits), but routed to a
+  model the gain mostly disappears (60% vs 60%): many types map to the same model in the quality model (only 7 distinct models
+  are picked across all labels), so label accuracy is not the bottleneck. The bottleneck is the quality model (phase 4).
+- Laya is a poor 33-way classifier (17% flat); keep it for the 3-way difficulty tier only.
+- Type overlap limits every method: the family-level ceiling is ~72%; many SkillsBench tasks fit several types.
+- Not tested: the open Jev weights (`autotrust/JEV-9B/27B/35B`, Apache-2.0, Qwen3.5 base, vLLM, bf16 9B needs ~18 GB vs the
+  12 GB GPU here) and NVIDIA's `prompt-task-and-complexity-classifier` (11 coarse categories, no mapping to the 33 types).
+- Caveat: LLM-made labels favour LLM-style classifiers (Jev, the chat model). Hand-check the labels before deciding.
+- Decision: keep MiniLM for now. Revisit Jev (hosted API: prompts leave the machine, ~0.4 s per session start, memoizable
+  per session) once the quality model is retrained on SkillsBench; then a better type may matter.
