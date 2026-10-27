@@ -111,6 +111,23 @@ Swap the router at runtime, no restart needed:
 curl -X POST http://localhost:8765/optmod/router/rule_based      # also: perf_router, trouter, passthrough, decision_tree
 ```
 
+### See every task type on the dashboard
+
+`scripts/send_task_types.py` sends one agent-style prompt per PerfRouter task type (33) through the proxy, so you can
+review the classification, routing mode and chosen model in `/ui`. The prompts are not the taxonomy's training examples.
+
+```bash
+uv run --env-file .env python scripts/send_task_types.py                    # all 33 types
+uv run --env-file .env python scripts/send_task_types.py --only code,reasoning   # families or type ids
+uv run --env-file .env python scripts/send_task_types.py --dry-run          # list prompts, send nothing
+```
+
+Options: `--base-url` (default `http://localhost:8765`), `--max-tokens` (32), `--pause` (0.5 s). Each prompt is its own
+session (a run id is prefixed, so reruns don't hit the session pin). The requests are real and cost a few cents. After each
+call it prints the expected type, the logged `pr_task_type`, `pr_routing_mode`, top similarity and final model, then a match
+total. Prompts that mention an attachment, image or very long document (multimodal, long-context) are expected to miss, since
+no file is sent.
+
 ### Troubleshooting
 
 | Symptom | Fix |
@@ -297,6 +314,7 @@ escalation.py         EscalationPolicy
 model_health.py       ModelHealth — per-model failure TTL (by error type or provider reset time)
 start.sh / stop.sh    Run the server in the background with uv (pid + log files)
 curl_examples.txt     Easy / medium / hard request examples and log-check commands
+scripts/send_task_types.py   One prompt per PerfRouter task type, sent through the proxy for dashboard review
 log.py                Append-only JSONL log
 stats.py              /api/stats aggregation (model_tokens, cost tracking)
 routing/
