@@ -96,6 +96,14 @@ def _load_models_from_perfrouter(raw: dict, config_dir: Path) -> list[ModelConfi
 
     perfrouter_models_yaml = perf_cfg.get("perfrouter_models_yaml", "../perfrouter/models.yaml")
     models_yaml_path       = (config_dir / perfrouter_models_yaml).resolve()
+    if not models_yaml_path.exists():
+        # No sibling ../perfrouter checkout: use the copy shipped with optmod.
+        bundled = (config_dir / "routing" / "perfrouter" / "models.yaml").resolve()
+        _log.warning(
+            "[optmod] %s not found; using bundled %s (clone perfrouter next to optmod to use the live pool)",
+            models_yaml_path, bundled,
+        )
+        models_yaml_path = bundled
 
     perfrouter_raw    = yaml.safe_load(models_yaml_path.read_text())
     perfrouter_models = perfrouter_raw.get("models", [])

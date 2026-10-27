@@ -133,7 +133,7 @@ no file is sent.
 | Symptom | Fix |
 |---|---|
 | "no API key" warnings at startup | the key is not in `.env`, or you started without `--env-file .env` |
-| PerfRouter "failed to load" in the log; every request goes to the primary model | `../perfrouter` is missing, or `perf_router.pkl` / the data files are not where `perfrouter_data_dir` points |
+| PerfRouter "failed to load" in the log; every request goes to the primary model | the `torch` / `sentence-transformers` / `xgboost` extras are not installed (`uv pip install -e '.[trouter]'`). A missing `../perfrouter` is fine: optmod falls back to the copies in `routing/perfrouter/` (taxonomy, registry, features, `perf_router.pkl`, `models.yaml`) and logs a warning. Clone perfrouter next to optmod to use the live pool instead |
 | `config.yaml` change has no effect | restart the server; `--reload` ignores `.yaml` |
 | Dashboard shows old models or tiers | restart, and use CLEAR LOG for rows from a previous pool |
 | Slow first request after start | encoder and Laya warm-up; later requests take a few milliseconds of routing time |
