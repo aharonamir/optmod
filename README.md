@@ -38,39 +38,88 @@ The current pool is multi-provider: DeepSeek direct API for the flagship models,
 
 `perf_router.model_set` chooses the pool: `curated` (the IDs in `curated_models`) or `full` (every model in the PerfRouter data, currently ~80). On failure a request escalates to the best-scoring healthy model that can take the prompt — see [Escalation and model health](#escalation-and-model-health); after the attempts are used up the proxy returns 502. Edit `config.yaml` and hard-restart (or `POST /optmod/restart`) to change the pool.
 
-## Quickstart
+## Install and run
+
+### Requirements
+
+- Python 3.11+ and [uv](https://docs.astral.sh/uv/)
+- The sibling [`perfrouter`](../perfrouter) repository checked out next to this one (`../perfrouter`). The default router
+  loads its data (`../perfrouter/data`), checkpoint (`../perfrouter/models/perf_router.pkl`) and `models.yaml` from there
+  (`perf_router.perfrouter_data_dir` in `config.yaml`).
+- An OpenRouter API key. A DeepSeek key is also needed for the default primary model (`deepseek-v4-flash`); keys for other
+  providers (Google, Anthropic, OpenAI, Moonshot) are optional, since models without a native key go through OpenRouter.
+- Optional: a GPU makes the Laya tier faster; everything also runs on CPU.
+
+### Install
 
 ```bash
-# 1. Install
-uv venv && uv pip install -e '.[dev]'
+cd ~/workspace
+git clone <optmod-url> optmod && git clone <perfrouter-url> perfrouter   # side by side
 
-# 2. Add provider API keys (both required by the default config)
-echo "OPENROUTER_API_KEY=sk-or-..." >> .env
-echo "DEEPSEEK_API_KEY=sk-..."      >> .env
+cd optmod
+uv venv
+uv pip install -e '.[dev,perfrouter]'     # perfrouter extra = the sibling package (xgboost, sentence-transformers)
+uv pip install -e '.[laya]'               # optional: Laya difficulty tier (perf_router.laya.mode != off)
+uv pip install -e '.[trouter]'            # optional: only for the `trouter` router (torch)
+```
 
-# 3. Run — `uv run` must be told to load .env (it doesn't by default)
+The first start downloads the `all-MiniLM-L6-v2` encoder (and the Laya checkpoint if enabled) from Hugging Face, which takes a
+minute; later starts load from the local cache. Set `HF_TOKEN` to avoid anonymous-download rate limits.
+
+### Configure keys
+
+```bash
+cat > .env <<'EOF2'
+OPENROUTER_API_KEY=sk-or-...
+DEEPSEEK_API_KEY=sk-...
+# GOOGLE_API_KEY= ANTHROPIC_API_KEY= OPENAI_API_KEY= MOONSHOT_API_KEY=   (optional)
+EOF2
+```
+
+`.env` is git-ignored. `uv run` does not load it by itself, so always pass `--env-file .env` (the helper scripts do).
+
+### Run
+
+```bash
+./start.sh            # background process; pid in .optmod.pid, log in optmod.out.log (--foreground, --reload for dev)
+./stop.sh
+
+# or directly
 uv run --env-file .env uvicorn main:app --host 0.0.0.0 --port 8765 --reload
+```
 
-# 4. Verify
-curl http://localhost:8765/optmod/status
+`--reload` only watches `.py` files: after editing `config.yaml`, restart (`./stop.sh && ./start.sh`). Startup takes about
+10 seconds while the models load; `start.sh` waits for it.
 
-# 5. Open the dashboard
-open http://localhost:8765/ui
+### Check it works
 
-# 6. Send a request
+```bash
+curl http://localhost:8765/optmod/status          # router, pool, model health, pins, laya
+open http://localhost:8765/ui                     # dashboard (use xdg-open on Linux)
+
 curl -X POST http://localhost:8765/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"optmod","messages":[{"role":"user","content":"why does quicksort fail on sorted input?"}]}'
-
-# 6b. Or use the helper scripts (uv, background process, pid + log files)
-./start.sh      # --foreground to stay attached, --reload for dev
-./stop.sh
-
-# 7. Swap router at runtime (no restart needed)
-curl -X POST http://localhost:8765/optmod/router/rule_based
-curl -X POST http://localhost:8765/optmod/router/trouter
-curl -X POST http://localhost:8765/optmod/router/passthrough
 ```
+
+Point any OpenAI-compatible client at `http://localhost:8765/v1` (any API key string; the model name is ignored). The routing
+decision of each request is logged to `routing.log.jsonl` and shown in the dashboard.
+
+Swap the router at runtime, no restart needed:
+
+```bash
+curl -X POST http://localhost:8765/optmod/router/rule_based      # also: perf_router, trouter, passthrough, decision_tree
+```
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| "no API key" warnings at startup | the key is not in `.env`, or you started without `--env-file .env` |
+| PerfRouter "failed to load" in the log; every request goes to the primary model | `../perfrouter` is missing, or `perf_router.pkl` / the data files are not where `perfrouter_data_dir` points |
+| `config.yaml` change has no effect | restart the server; `--reload` ignores `.yaml` |
+| Dashboard shows old models or tiers | restart, and use CLEAR LOG for rows from a previous pool |
+| Slow first request after start | encoder and Laya warm-up; later requests take a few milliseconds of routing time |
 
 ### TRouter — neural net routing (optional)
 
