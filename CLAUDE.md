@@ -302,6 +302,7 @@ exercise paths that touch DeepSeek direct.
 
 ## What's Not Yet Built
 
+- Retrain `perf_router.pkl` on SkillsBench results (quality model is benchmark/WCB-derived only) — plan: `optmod-spec/plans/perfrouter-agentic-taxonomy.md`, "Next steps"
 - `routing_policy.pkl` — WildClawBench-trained scikit-learn tree; needed to enable `decision_tree` router without falling back to `rule_based`
 - Hermes plugin — thin wrapper calling `/optmod/*` control endpoints
 - Feedback loop CLI — retrains TRouter / decision tree / PerfRouter from `routing.log.jsonl`

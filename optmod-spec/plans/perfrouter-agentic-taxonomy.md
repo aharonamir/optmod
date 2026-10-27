@@ -5,8 +5,8 @@
 | Phase | Status | Scope |
 |---|---|---|
 | 1 | Done (`bfa4094`) | Log/dashboard show `pr_task_type` instead of the keyword-regex `tool_call` label. |
-| 2 | **Done** (uncommitted) | 56 agentic examples in `../perfrouter/data/agentic_examples.json`, merged by `patch_taxonomy_agentic.py`; inference scores each type by its closest example (`example_pooling: max`). No new types, so no XGBoost retrain. |
-| 3 | **Done** (uncommitted) | `softmax_temperature` weights, `min_similarity` 0.20 -> 0.25, `low_similarity_fallback: general`. Metadata hint not built. Validation (live run, hand labels) is yours. |
+| 2 | **Done** | 56 agentic examples in `../perfrouter/data/agentic_examples.json`, merged by `patch_taxonomy_agentic.py`; inference scores each type by its closest example (`example_pooling: max`). No new types, so no XGBoost retrain. |
+| 3 | **Done** | `softmax_temperature` weights, `min_similarity` 0.20 -> 0.25, `low_similarity_fallback: general`. Metadata hint not built. Validation (live run, hand labels) is yours. |
 
 Training repo: `../perfrouter` (taxonomy built by `perfrouter/pipeline/build_task_taxonomy.py`, one-shot; inference
 in `perfrouter/inference/perf_router_inference.py`, copied into `routing/perfrouter/` here).
@@ -89,3 +89,25 @@ in `perfrouter/inference/perf_router_inference.py`, copied into `routing/perfrou
 - **Not built:** the SkillsBench category metadata hint (needs the harness to pass it), chunked embedding of long prompts
   (MiniLM truncates at 256 tokens, so only the start of a long prompt is embedded), and boilerplate stripping (no wrapper
   text seen in logged sessions, as the user text is the task prompt).
+
+## Next steps: retrain the quality model on SkillsBench results (phase 4, after validation runs)
+
+Phases 2-3 only improve which task type a prompt gets and how the top-3 types are weighted. `perf_router.pkl` (XGBoost) is
+unchanged: it predicts quality per (model, task type) from benchmark-derived affinity scores (AA, Arena, terminal-bench,
+scicode, ...) plus WildClawBench ground truth where a WCB CSV was supplied. No SkillsBench outcome is in it, so a correct
+type does not guarantee the quality ranking for that type matches how models do on SkillsBench. After the validation runs:
+
+1. **Collect outcomes.** Per model and task: pass/fail (or verifier score) and cost, from the run results joined with
+   `routing.log.jsonl` (`pr_task_type`, `final_model`). Route runs through several models, not only the router's picks,
+   or the data only covers what the router already chose.
+2. **Convert to training rows.** Per (model, task type): mean score over tasks of that type, written in the format
+   `train_perf_router.py` reads for `--wcb-csv` (`_load_wcb_scores`), so they get ground-truth weight 3.0 vs 1.0 for
+   benchmark-derived rows. Use the same `pr_task_type` the classifier assigns, so train and inference types agree.
+3. **Check coverage.** Models that never ran get benchmark-derived rows only; note which types have too few tasks to trust.
+4. **Retrain** with `train_perf_router.py --wcb-csv <skillsbench.csv>`, keep a held-out set of tasks for evaluation,
+   copy `perf_router.pkl` to `../perfrouter/models/`, restart optmod.
+5. **Cheaper interim option:** give the agentic types (`tool_use.terminal_agent`, `code.scientific_coding`,
+   `synthesis.data_analysis_report`) benchmark weights that reflect agent work, then rebuild features and retrain.
+6. **Re-tune** `cost_weight`, `degradation_threshold` and `min_similarity` on the new model.
+
+Also confirm how the current `.pkl` was trained (whether a WCB CSV was used; the file is dated 2026-10-05).
