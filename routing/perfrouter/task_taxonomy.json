@@ -1,0 +1,757 @@
+{
+  "total_types": 33,
+  "inherited_wcb": 14,
+  "new_types": 19,
+  "benchmarks_used": [
+    "aa_coding_index",
+    "aa_intelligence_index",
+    "aa_math_index",
+    "bench_aa_lcr",
+    "bench_aime",
+    "bench_gpqa",
+    "bench_hle",
+    "bench_ifbench",
+    "bench_livecodebench",
+    "bench_math_500",
+    "bench_mmmu_pro",
+    "bench_scicode",
+    "bench_tau2_bench",
+    "bench_terminal_bench"
+  ],
+  "task_types": [
+    {
+      "id": "code.debugging",
+      "name": "Code Debugging",
+      "parent": "code",
+      "definition": "Identifying and fixing errors, bugs, or issues in existing code.",
+      "examples": [
+        "find the bug in this function",
+        "why does this code crash?"
+      ],
+      "relevant_aa_benchmarks": [
+        "arena_code_elo",
+        "bench_livecodebench",
+        "aa_coding_index"
+      ],
+      "benchmark_weights": {
+        "arena_code_elo": 0.3,
+        "bench_livecodebench": 0.5,
+        "aa_coding_index": 0.2
+      },
+      "inherited_from_wcb": true,
+      "agentic_examples": [
+        "The test suite in /app/tests fails with a KeyError after the last refactor. Find the root cause in the source under /app/src, fix it without changing the tests, and make sure every test passes.",
+        "Our training script crashes with a CUDA out of memory error after 200 steps. Inspect /workspace/train.py and the config, find what leaks memory and patch it so the run completes.",
+        "The service in /srv/api returns wrong totals for orders with discounts. Reproduce the bug with the sample data, locate the faulty calculation, and fix it."
+      ]
+    },
+    {
+      "id": "code.generation",
+      "name": "Code Generation",
+      "parent": "code",
+      "definition": "Writing new code, scripts, or programs from a specification or description.",
+      "examples": [
+        "write a Python function that...",
+        "implement a REST API endpoint for..."
+      ],
+      "relevant_aa_benchmarks": [
+        "arena_code_elo",
+        "bench_livecodebench",
+        "bench_scicode",
+        "aa_coding_index"
+      ],
+      "benchmark_weights": {
+        "arena_code_elo": 0.3,
+        "bench_livecodebench": 0.4,
+        "bench_scicode": 0.2,
+        "aa_coding_index": 0.1
+      },
+      "inherited_from_wcb": true,
+      "agentic_examples": [
+        "Implement a command line tool in /app/cli.py that reads a CSV of transactions and writes a per-customer summary as JSON. It must pass the checks in /app/tests/test_cli.py.",
+        "Write a Python module /app/scheduler.py that implements the interface described in /app/SPEC.md and add unit tests for it.",
+        "Build a small REST service with two endpoints described in /app/api.md, using only the standard library, and save it as /app/server.py."
+      ]
+    },
+    {
+      "id": "code.puzzle_or_algorithm",
+      "name": "Code Puzzle or Algorithm",
+      "parent": "code",
+      "definition": "Solving algorithmic problems, coding puzzles, or competitive programming tasks.",
+      "examples": [
+        "solve the two-sum problem",
+        "implement Dijkstra's algorithm"
+      ],
+      "relevant_aa_benchmarks": [
+        "bench_livecodebench",
+        "aa_coding_index"
+      ],
+      "benchmark_weights": {
+        "bench_livecodebench": 0.7,
+        "aa_coding_index": 0.3
+      },
+      "inherited_from_wcb": true,
+      "agentic_examples": [
+        "Write a program that finds the minimum-cost assignment of workers to shifts given the constraints in /app/problem.txt, and write the solution to /app/answer.json. A solution is accepted only if it is optimal.",
+        "Implement an efficient algorithm that, for the graph in /app/graph.json, computes the shortest route visiting all required nodes, and print the total length.",
+        "Solve the optimization puzzle described in /app/puzzle.md. Your solver must finish within the time limit on the hidden larger instances."
+      ]
+    },
+    {
+      "id": "retrieval.document_extraction",
+      "name": "Document Extraction",
+      "parent": "retrieval",
+      "definition": "Extracting specific information, facts, or data from documents or text.",
+      "examples": [
+        "extract all dates from this contract",
+        "find the key findings in this report"
+      ],
+      "relevant_aa_benchmarks": [
+        "arena_document_elo",
+        "bench_aa_lcr"
+      ],
+      "benchmark_weights": {
+        "arena_document_elo": 0.6,
+        "bench_aa_lcr": 0.4
+      },
+      "inherited_from_wcb": true,
+      "agentic_examples": [
+        "Open the PDF at /root/invoice.pdf, extract the vendor name, invoice date, line items and total, and write them to /root/result.json using the schema in /root/schema.json.",
+        "Read the scanned forms in /root/forms and extract the filled-in fields of each one into a single spreadsheet /root/output.xlsx.",
+        "Parse the contract in /root/contract.docx, find every clause that mentions termination or renewal, and save the exact clause text with its section number to /root/clauses.json."
+      ]
+    },
+    {
+      "id": "retrieval.repo_code_search",
+      "name": "Repository Code Search",
+      "parent": "retrieval",
+      "definition": "Searching and retrieving relevant code snippets or files from a code repository.",
+      "examples": [
+        "find the function that handles authentication",
+        "locate the configuration file"
+      ],
+      "relevant_aa_benchmarks": [
+        "bench_aa_lcr",
+        "aa_coding_index"
+      ],
+      "benchmark_weights": {
+        "bench_aa_lcr": 0.5,
+        "aa_coding_index": 0.5
+      },
+      "inherited_from_wcb": true,
+      "agentic_examples": [
+        "Find where in the repository under /app the retry policy for outbound requests is configured, list every call site that overrides it, and write the file paths to /app/answer.txt.",
+        "Search the codebase for all usages of the deprecated function `load_legacy_config` and report each file and line.",
+        "Locate the module responsible for rendering invoices in /workspace/repo and explain which functions it calls to compute taxes."
+      ]
+    },
+    {
+      "id": "retrieval.web_search",
+      "name": "Web Search",
+      "parent": "retrieval",
+      "definition": "Searching the web for information, facts, or resources.",
+      "examples": [
+        "find the latest news on AI",
+        "search for Python tutorials"
+      ],
+      "relevant_aa_benchmarks": [
+        "arena_search_elo",
+        "aa_intelligence_index"
+      ],
+      "benchmark_weights": {
+        "arena_search_elo": 0.7,
+        "aa_intelligence_index": 0.3
+      },
+      "inherited_from_wcb": true,
+      "agentic_examples": [
+        "Find the latest published version of the library mentioned in /app/notes.md and its release date, then record both in /app/versions.json.",
+        "Research the public documentation of the API in /app/README.md and list the rate limits and authentication methods it supports."
+      ]
+    },
+    {
+      "id": "safety.constraint_following",
+      "name": "Constraint Following",
+      "parent": "safety",
+      "definition": "Adhering to safety constraints, ethical guidelines, or refusal policies.",
+      "examples": [
+        "refuse to generate harmful content",
+        "follow content policy"
+      ],
+      "relevant_aa_benchmarks": [
+        "bench_ifbench"
+      ],
+      "benchmark_weights": {
+        "bench_ifbench": 1.0
+      },
+      "inherited_from_wcb": true
+    },
+    {
+      "id": "social.conversation_analysis",
+      "name": "Conversation Analysis",
+      "parent": "social",
+      "definition": "Analyzing conversations, dialogues, or social interactions for sentiment, intent, or patterns.",
+      "examples": [
+        "analyze the sentiment of this chat",
+        "identify the main topics discussed"
+      ],
+      "relevant_aa_benchmarks": [
+        "arena_text_elo",
+        "aa_intelligence_index"
+      ],
+      "benchmark_weights": {
+        "arena_text_elo": 0.7,
+        "aa_intelligence_index": 0.3
+      },
+      "inherited_from_wcb": true
+    },
+    {
+      "id": "social.negotiation_or_communication",
+      "name": "Negotiation or Communication",
+      "parent": "social",
+      "definition": "Engaging in negotiation, persuasion, or effective communication strategies.",
+      "examples": [
+        "negotiate a deal",
+        "write a persuasive email"
+      ],
+      "relevant_aa_benchmarks": [
+        "arena_text_elo",
+        "aa_intelligence_index"
+      ],
+      "benchmark_weights": {
+        "arena_text_elo": 0.7,
+        "aa_intelligence_index": 0.3
+      },
+      "inherited_from_wcb": true
+    },
+    {
+      "id": "synthesis.creative_media",
+      "name": "Creative Media Synthesis",
+      "parent": "synthesis",
+      "definition": "Generating creative content such as stories, poems, scripts, or marketing copy.",
+      "examples": [
+        "write a short story",
+        "compose a poem about nature"
+      ],
+      "relevant_aa_benchmarks": [
+        "arena_text_elo",
+        "aa_intelligence_index"
+      ],
+      "benchmark_weights": {
+        "arena_text_elo": 0.6,
+        "aa_intelligence_index": 0.4
+      },
+      "inherited_from_wcb": true
+    },
+    {
+      "id": "synthesis.report_or_summary",
+      "name": "Report or Summary Synthesis",
+      "parent": "synthesis",
+      "definition": "Summarizing or synthesizing information into coherent reports, summaries, or briefs.",
+      "examples": [
+        "summarize this article",
+        "write a report on quarterly earnings"
+      ],
+      "relevant_aa_benchmarks": [
+        "arena_document_elo",
+        "bench_aa_lcr",
+        "arena_text_elo"
+      ],
+      "benchmark_weights": {
+        "arena_document_elo": 0.5,
+        "bench_aa_lcr": 0.3,
+        "arena_text_elo": 0.2
+      },
+      "inherited_from_wcb": true,
+      "agentic_examples": [
+        "Read all the documents in /data/docs and write a one-page summary of the key decisions and open issues to /output/summary.md.",
+        "Summarize the incident logs in /data/incidents into a short timeline with root causes and follow-ups, and save it as /output/postmortem.md."
+      ]
+    },
+    {
+      "id": "synthesis.structured_data",
+      "name": "Structured Data Synthesis",
+      "parent": "synthesis",
+      "definition": "Generating structured data like tables, JSON, CSV, or database entries from text.",
+      "examples": [
+        "convert this text to JSON",
+        "create a table of key metrics"
+      ],
+      "relevant_aa_benchmarks": [
+        "arena_document_elo",
+        "aa_intelligence_index"
+      ],
+      "benchmark_weights": {
+        "arena_document_elo": 0.6,
+        "aa_intelligence_index": 0.4
+      },
+      "inherited_from_wcb": true,
+      "agentic_examples": [
+        "Transform the nested JSON files in /root/input into a flat table with the columns defined in /root/columns.md and save it as /root/output.csv, keeping every record.",
+        "Convert the log lines in /root/app.log into structured JSON events with timestamp, level, component and message, and write one event per line to /root/events.jsonl.",
+        "Normalize the messy customer records in /root/customers.csv, deduplicate them, and write the cleaned data to /root/clean.csv with the schema from /root/schema.json."
+      ]
+    },
+    {
+      "id": "tool_use.file_or_system_operation",
+      "name": "File or System Operation",
+      "parent": "tool_use",
+      "definition": "Using tools to perform file operations, system commands, or environment interactions.",
+      "examples": [
+        "create a directory",
+        "read a file",
+        "run a shell command"
+      ],
+      "relevant_aa_benchmarks": [
+        "bench_terminal_bench",
+        "bench_tau2_bench"
+      ],
+      "benchmark_weights": {
+        "bench_terminal_bench": 0.6,
+        "bench_tau2_bench": 0.4
+      },
+      "inherited_from_wcb": true,
+      "agentic_examples": [
+        "Reorganize the files under /root/inbox into folders by year and document type, rename them with the pattern in /root/rules.md, and leave a log of every move in /root/moves.log.",
+        "Install the missing dependencies, fix the file permissions in /srv/app, and make sure the service starts and answers on port 8080.",
+        "Convert every spreadsheet in /root/data to CSV, merge them into /root/all.csv, and remove the originals only after verifying the row counts."
+      ]
+    },
+    {
+      "id": "tool_use.multi_step_workflow",
+      "name": "Multi-Step Workflow",
+      "parent": "tool_use",
+      "definition": "Executing complex multi-step workflows involving multiple tool calls and dependencies.",
+      "examples": [
+        "deploy a web app",
+        "run a data pipeline"
+      ],
+      "relevant_aa_benchmarks": [
+        "bench_tau2_bench",
+        "bench_terminal_bench"
+      ],
+      "benchmark_weights": {
+        "bench_tau2_bench": 0.7,
+        "bench_terminal_bench": 0.3
+      },
+      "inherited_from_wcb": true,
+      "agentic_examples": [
+        "First read /root/instructions.md, then process each input file in /root/inputs through the pipeline it describes, validate the intermediate results, and finally produce the combined report /root/report.json.",
+        "Collect the data from the three sources listed in /root/sources.txt, clean and join them, compute the metrics from the specification, and write the final table to /root/metrics.csv.",
+        "Set up the environment, run the analysis scripts in order, check each output against the expected format, and fix any step that fails before moving on."
+      ]
+    },
+    {
+      "id": "reasoning.mathematical",
+      "name": "Mathematical Reasoning",
+      "parent": "reasoning",
+      "definition": "Solving mathematical problems, proofs, or calculations requiring step-by-step reasoning.",
+      "examples": [
+        "solve the integral",
+        "prove the theorem",
+        "calculate the derivative"
+      ],
+      "relevant_aa_benchmarks": [
+        "bench_math_500",
+        "bench_aime",
+        "aa_math_index"
+      ],
+      "benchmark_weights": {
+        "bench_math_500": 0.4,
+        "bench_aime": 0.3,
+        "aa_math_index": 0.3
+      },
+      "inherited_from_wcb": false,
+      "agentic_examples": [
+        "Given the model and data in /root/problem.md, derive the quantity asked for analytically, check it numerically, and write the final value with the required precision to /root/answer.txt.",
+        "Compute the expected value described in /root/task.md using the formulas from the provided notes and save the result with at least six significant digits."
+      ]
+    },
+    {
+      "id": "reasoning.scientific",
+      "name": "Scientific Reasoning",
+      "parent": "reasoning",
+      "definition": "Answering graduate-level science questions or reasoning about scientific concepts.",
+      "examples": [
+        "explain quantum entanglement",
+        "what is the mechanism of CRISPR?"
+      ],
+      "relevant_aa_benchmarks": [
+        "bench_gpqa",
+        "bench_scicode"
+      ],
+      "benchmark_weights": {
+        "bench_gpqa": 0.7,
+        "bench_scicode": 0.3
+      },
+      "inherited_from_wcb": false,
+      "agentic_examples": [
+        "Using the measurements in /data/sample.csv, determine the physical or chemical property described in /data/README.md, show the intermediate steps, and write the result with units to /output/answer.json.",
+        "Analyze the instrument data in /data/seismic.csv or /data/spectrum.csv according to the task notes, identify the event or feature asked for, and report its parameters."
+      ]
+    },
+    {
+      "id": "reasoning.hard_general",
+      "name": "Hard General Reasoning",
+      "parent": "reasoning",
+      "definition": "Solving extremely challenging reasoning problems across diverse domains.",
+      "examples": [
+        "answer a question from Humanity's Last Exam",
+        "solve a complex logic puzzle"
+      ],
+      "relevant_aa_benchmarks": [
+        "bench_hle",
+        "aa_intelligence_index"
+      ],
+      "benchmark_weights": {
+        "bench_hle": 0.6,
+        "aa_intelligence_index": 0.4
+      },
+      "inherited_from_wcb": false
+    },
+    {
+      "id": "reasoning.long_context",
+      "name": "Long Context Reasoning",
+      "parent": "reasoning",
+      "definition": "Understanding and reasoning over very long documents or contexts.",
+      "examples": [
+        "analyze a 100-page report",
+        "find contradictions in a long contract"
+      ],
+      "relevant_aa_benchmarks": [
+        "bench_aa_lcr"
+      ],
+      "benchmark_weights": {
+        "bench_aa_lcr": 1.0
+      },
+      "inherited_from_wcb": false,
+      "agentic_examples": [
+        "Read the large set of documents in /data/corpus, cross-check the claims in /data/claims.txt against them, and mark each claim as supported, contradicted or unverifiable with the supporting passage.",
+        "Go through the full transcript in /data/meeting.txt and the attached reports and answer the detailed questions in /data/questions.md."
+      ]
+    },
+    {
+      "id": "instruction.complex_following",
+      "name": "Complex Instruction Following",
+      "parent": "instruction",
+      "definition": "Adhering to complex, multi-part, or nuanced instructions with constraints.",
+      "examples": [
+        "follow these 10 formatting rules",
+        "write a response that meets all specified criteria"
+      ],
+      "relevant_aa_benchmarks": [
+        "bench_ifbench"
+      ],
+      "benchmark_weights": {
+        "bench_ifbench": 1.0
+      },
+      "inherited_from_wcb": false,
+      "agentic_examples": [
+        "Follow all the rules in /root/policy.md while processing the requests in /root/requests.json: some rules override others, and every exception must be recorded in /root/decisions.json with the rule that applied.",
+        "Complete the task under the following constraints: do not modify files outside /app/out, keep the runtime under one minute, use only the allowed libraries, and document each assumption you make."
+      ]
+    },
+    {
+      "id": "multimodal.visual_reasoning",
+      "name": "Visual Reasoning",
+      "parent": "multimodal",
+      "definition": "Reasoning about images, diagrams, or visual data combined with text.",
+      "examples": [
+        "describe this image",
+        "answer questions about a chart"
+      ],
+      "relevant_aa_benchmarks": [
+        "arena_vision_elo",
+        "bench_mmmu_pro"
+      ],
+      "benchmark_weights": {
+        "arena_vision_elo": 0.7,
+        "bench_mmmu_pro": 0.3
+      },
+      "inherited_from_wcb": false,
+      "agentic_examples": [
+        "Inspect the images and charts in /root/figures, read the values off them, and use them to answer the questions in /root/questions.md."
+      ]
+    },
+    {
+      "id": "code.scientific_coding",
+      "name": "Scientific Coding",
+      "parent": "code",
+      "definition": "Writing code for scientific simulations, data analysis, or research tasks.",
+      "examples": [
+        "implement a Monte Carlo simulation",
+        "write code to analyze experimental data"
+      ],
+      "relevant_aa_benchmarks": [
+        "arena_code_elo",
+        "bench_scicode",
+        "bench_livecodebench"
+      ],
+      "benchmark_weights": {
+        "arena_code_elo": 0.2,
+        "bench_scicode": 0.5,
+        "bench_livecodebench": 0.3
+      },
+      "inherited_from_wcb": false,
+      "agentic_examples": [
+        "Using the measurements in /data/observations.csv, fit the model described in /data/README.md, estimate the parameters with uncertainties, and save the fitted values to /output/params.json.",
+        "Simulate the system described in /app/model.md with a numerical integrator, compare against the reference trajectory in /data/ref.npy, and tune the step size so the error stays below the stated tolerance.",
+        "Write a Python script that processes the raw sensor files in /data/raw, applies the calibration from /data/calibration.json, and computes the physical quantities requested in /app/task.md."
+      ]
+    },
+    {
+      "id": "tool_use.terminal_agent",
+      "name": "Terminal Agent",
+      "parent": "tool_use",
+      "definition": "Using terminal or shell environments to perform agentic coding and system tasks.",
+      "examples": [
+        "navigate the file system",
+        "install packages",
+        "run tests"
+      ],
+      "relevant_aa_benchmarks": [
+        "bench_terminal_bench"
+      ],
+      "benchmark_weights": {
+        "bench_terminal_bench": 1.0
+      },
+      "inherited_from_wcb": false,
+      "agentic_examples": [
+        "You are in a Linux sandbox with a broken build. Use the shell to find out why `make` fails, fix the problem in the source or the environment, and make sure `./run_tests.sh` passes.",
+        "Use the command line to inspect the files in /root, work out what has to be done from /root/TASK.md, carry it out with the tools available, and verify the result.",
+        "Compile the project in /workspace, run the benchmark binary, profile where the time goes, and apply changes until it runs at least twice as fast."
+      ]
+    },
+    {
+      "id": "tool_use.api_chaining",
+      "name": "API Chaining",
+      "parent": "tool_use",
+      "definition": "Chaining multiple API calls or tool invocations in sequence to achieve a goal.",
+      "examples": [
+        "fetch data from API A, transform it, and post to API B"
+      ],
+      "relevant_aa_benchmarks": [
+        "bench_tau2_bench"
+      ],
+      "benchmark_weights": {
+        "bench_tau2_bench": 1.0
+      },
+      "inherited_from_wcb": false,
+      "agentic_examples": [
+        "Use the provided HTTP API at http://localhost:8000 to look up the customer, fetch their orders, issue the refund for the failed one, and confirm the final state, writing each response to /root/trace.json.",
+        "Call the endpoints described in /root/openapi.yaml in the right order to create the resource, attach the files, and publish it, handling pagination and errors."
+      ]
+    },
+    {
+      "id": "reasoning.competition_math",
+      "name": "Competition Math",
+      "parent": "reasoning",
+      "definition": "Solving high-level mathematical competition problems (e.g., AIME, Olympiad).",
+      "examples": [
+        "solve an AIME geometry problem",
+        "prove an inequality"
+      ],
+      "relevant_aa_benchmarks": [
+        "bench_aime",
+        "aa_math_index"
+      ],
+      "benchmark_weights": {
+        "bench_aime": 0.7,
+        "aa_math_index": 0.3
+      },
+      "inherited_from_wcb": false
+    },
+    {
+      "id": "synthesis.data_analysis_report",
+      "name": "Data Analysis Report",
+      "parent": "synthesis",
+      "definition": "Analyzing data and generating a structured report with insights and visualizations.",
+      "examples": [
+        "analyze this dataset and write a summary",
+        "create a report on sales trends"
+      ],
+      "relevant_aa_benchmarks": [
+        "arena_document_elo",
+        "bench_aa_lcr",
+        "aa_intelligence_index"
+      ],
+      "benchmark_weights": {
+        "arena_document_elo": 0.5,
+        "bench_aa_lcr": 0.3,
+        "aa_intelligence_index": 0.2
+      },
+      "inherited_from_wcb": false,
+      "agentic_examples": [
+        "Analyze the dataset in /data/measurements.csv, compute the statistics requested in /data/README.md, and write your findings and the numbers to /output/report.md and /output/results.json.",
+        "Examine the network capture summary in /data/traffic.json, identify anomalous hosts or intrusion patterns, and write a short report with evidence to /output/findings.md.",
+        "Using the sales spreadsheet in /data/sales.xlsx, compute monthly trends and outliers, build the requested charts, and write the analysis to /output/analysis.md."
+      ]
+    },
+    {
+      "id": "retrieval.knowledge_qa",
+      "name": "Knowledge QA",
+      "parent": "retrieval",
+      "definition": "Answering factual questions by retrieving knowledge from a corpus or memory.",
+      "examples": [
+        "what is the capital of France?",
+        "who discovered penicillin?"
+      ],
+      "relevant_aa_benchmarks": [
+        "arena_search_elo",
+        "aa_intelligence_index"
+      ],
+      "benchmark_weights": {
+        "arena_search_elo": 0.6,
+        "aa_intelligence_index": 0.4
+      },
+      "inherited_from_wcb": false,
+      "agentic_examples": [
+        "Using the reference documents in /data/docs, answer the questions in /data/questions.txt and write short, precise answers to /data/answers.txt.",
+        "Look up the requirements in the standards documents provided under /data/standards and state which ones apply to the system described in /data/system.md."
+      ]
+    },
+    {
+      "id": "social.sentiment_analysis",
+      "name": "Sentiment Analysis",
+      "parent": "social",
+      "definition": "Analyzing the sentiment, emotion, or tone of text.",
+      "examples": [
+        "determine if this review is positive or negative",
+        "analyze the emotional tone"
+      ],
+      "relevant_aa_benchmarks": [
+        "arena_text_elo",
+        "aa_intelligence_index"
+      ],
+      "benchmark_weights": {
+        "arena_text_elo": 0.8,
+        "aa_intelligence_index": 0.2
+      },
+      "inherited_from_wcb": false
+    },
+    {
+      "id": "safety.content_moderation",
+      "name": "Content Moderation",
+      "parent": "safety",
+      "definition": "Identifying and moderating harmful, toxic, or policy-violating content.",
+      "examples": [
+        "flag hate speech",
+        "detect spam"
+      ],
+      "relevant_aa_benchmarks": [
+        "bench_ifbench"
+      ],
+      "benchmark_weights": {
+        "bench_ifbench": 1.0
+      },
+      "inherited_from_wcb": false
+    },
+    {
+      "id": "instruction.format_constraint",
+      "name": "Format Constraint",
+      "parent": "instruction",
+      "definition": "Generating output that strictly adheres to a specified format (e.g., JSON, XML, markdown).",
+      "examples": [
+        "output as JSON",
+        "format as a table"
+      ],
+      "relevant_aa_benchmarks": [
+        "bench_ifbench"
+      ],
+      "benchmark_weights": {
+        "bench_ifbench": 1.0
+      },
+      "inherited_from_wcb": false,
+      "agentic_examples": [
+        "Produce the result as a JSON file at /root/answer.json with exactly the keys and number formats given in the task, rounded to two decimals, because it is checked by an automatic script.",
+        "Write the output as a CSV with the header and column order specified in /root/format.md. A single wrong column name makes the whole answer fail."
+      ]
+    },
+    {
+      "id": "multimodal.diagram_understanding",
+      "name": "Diagram Understanding",
+      "parent": "multimodal",
+      "definition": "Interpreting and reasoning about diagrams, flowcharts, or schematics.",
+      "examples": [
+        "explain this flowchart",
+        "what does this circuit diagram represent?"
+      ],
+      "relevant_aa_benchmarks": [
+        "arena_vision_elo",
+        "bench_mmmu_pro"
+      ],
+      "benchmark_weights": {
+        "arena_vision_elo": 0.7,
+        "bench_mmmu_pro": 0.3
+      },
+      "inherited_from_wcb": false,
+      "agentic_examples": [
+        "Look at the architecture diagram image at /root/diagram.png, list the components and the connections between them, and write them to /root/graph.json."
+      ]
+    },
+    {
+      "id": "code.code_review",
+      "name": "Code Review",
+      "parent": "code",
+      "definition": "Reviewing code for quality, correctness, style, and potential improvements.",
+      "examples": [
+        "review this pull request",
+        "suggest improvements to this code"
+      ],
+      "relevant_aa_benchmarks": [
+        "arena_code_elo",
+        "aa_coding_index",
+        "bench_livecodebench"
+      ],
+      "benchmark_weights": {
+        "arena_code_elo": 0.4,
+        "aa_coding_index": 0.4,
+        "bench_livecodebench": 0.2
+      },
+      "inherited_from_wcb": false,
+      "agentic_examples": [
+        "Audit the source under /app/src for security vulnerabilities such as injection, unsafe deserialization and path traversal, and write each finding with file, line and severity to /app/report.json.",
+        "Review the patch in /app/change.diff for correctness and style problems and list the issues you find, ordered by importance.",
+        "Check the configuration files under /etc/service for insecure settings and produce a list of misconfigurations with recommended fixes."
+      ]
+    },
+    {
+      "id": "reasoning.logical_puzzle",
+      "name": "Logical Puzzle",
+      "parent": "reasoning",
+      "definition": "Solving logic puzzles, riddles, or brain teasers requiring deductive reasoning.",
+      "examples": [
+        "solve the Einstein puzzle",
+        "who is the liar?"
+      ],
+      "relevant_aa_benchmarks": [
+        "bench_hle",
+        "aa_intelligence_index"
+      ],
+      "benchmark_weights": {
+        "bench_hle": 0.5,
+        "aa_intelligence_index": 0.5
+      },
+      "inherited_from_wcb": false
+    },
+    {
+      "id": "synthesis.creative_writing",
+      "name": "Creative Writing",
+      "parent": "synthesis",
+      "definition": "Generating original creative text such as stories, poems, or dialogues.",
+      "examples": [
+        "write a fantasy short story",
+        "compose a haiku"
+      ],
+      "relevant_aa_benchmarks": [
+        "arena_text_elo",
+        "aa_intelligence_index"
+      ],
+      "benchmark_weights": {
+        "arena_text_elo": 0.8,
+        "aa_intelligence_index": 0.2
+      },
+      "inherited_from_wcb": false
+    }
+  ],
+  "arena_updated": true
+}
